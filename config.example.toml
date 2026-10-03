@@ -1,0 +1,54 @@
+[general]
+assistant_name = "Джарвис" # Имя ассистента.
+user_title = "сэр" # Обращение к пользователю.
+data_dir = "data" # Папка данных относительно корня проекта.
+log_level = "INFO" # Уровень журналирования.
+
+[agent]
+model = "claude-opus-5-5" # Модель основной сессии.
+effort = "medium" # Глубина рассуждения.
+extra_instructions = "" # Дополнение к системному промпту.
+
+[voice]
+enabled = true # Включить голос.
+wake_threshold = 0.5 # Порог ключевой фразы.
+whisper_model = "small" # Модель распознавания.
+whisper_device = "cuda" # Устройство распознавания.
+whisper_compute_type = "float16" # Тип вычислений.
+language = "ru" # Язык речи.
+piper_voice = "models/piper/ru_RU-denis-medium.onnx" # Файл голоса.
+# input_device = 0 # Устройство ввода: номер или имя; без ключа — системное.
+# output_device = 0 # Устройство вывода: номер или имя; без ключа — системное.
+follow_up_s = 6.0 # Ожидание следующей реплики.
+silence_s = 0.9 # Пауза для окончания записи.
+max_record_s = 15.0 # Максимальная длина записи.
+
+[server]
+host = "127.0.0.1" # Локальный адрес панели.
+port = 8765 # Порт панели.
+open_browser_on_start = false # Открыть панель при запуске.
+
+[permissions]
+auto_allow = [] # Дополнительные шаблоны разрешённых инструментов.
+always_ask = [] # Шаблоны инструментов с обязательным запросом.
+safe_shell = [ # Команды только для чтения; ограничения аргументов дополнительно проверяются в коде.
+  '(?i)^Get-[A-Za-z][A-Za-z0-9]*(?:\s+.+)?$',
+  '(?i)^(ls|dir|pwd|whoami|hostname|systeminfo|date|tasklist|ipconfig)(?:\s+.+)?$',
+  '(?i)^(cat|type|where|where\.exe)\s+.+$',
+  '(?i)^git\s+(status|log|diff|show|branch)(?:\s+.+)?$',
+]
+approval_timeout_s = 180 # Время ожидания подтверждения.
+
+[browser]
+enabled = true # Подключить Playwright MCP.
+command = "npx" # Команда запуска MCP-сервера.
+args = ["-y", "@playwright/mcp@latest"] # Аргументы команды.
+
+[code]
+workspace_roots = ["~/Desktop"] # Корни доступных проектов.
+max_parallel = 2 # Число одновременных задач.
+max_budget_usd = 5.0 # Лимит стоимости задачи.
+effort = "high" # Глубина рассуждения в задачах по коду.
+
+[apps]
+# telegram = "C:/Users/имя/AppData/Roaming/Telegram Desktop/Telegram.exe" # Алиас приложения.
