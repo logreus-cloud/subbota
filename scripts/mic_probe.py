@@ -12,7 +12,7 @@ import sounddevice as sd
 
 from jarvis.config import load_config
 from jarvis.voice.audio import MicStream, rms
-from jarvis.voice.wake import WakeWordDetector
+from jarvis.voice.wake import make_detector
 
 
 def main() -> None:
@@ -23,11 +23,11 @@ def main() -> None:
         device = int(device)
     info = sd.query_devices(device, kind="input")
     print(f"Устройство: {info['name']}, частота по умолчанию {info['default_samplerate']:.0f} Гц")
-    wake = WakeWordDetector(cfg.wake_threshold)
+    wake = make_detector(cfg)
     wake.load()
     mic = MicStream(device)
     mic.start()
-    print(f"Порог wake: {cfg.wake_threshold}. Говорите «Hey Jarvis» в течение {seconds:.0f} с…")
+    print(f"Движок {cfg.wake_engine}: говорите «{cfg.wake_word}», «стоп» и обычные фразы {seconds:.0f} с…")
     end = time.monotonic() + seconds
     window_rms, window_score, blocks = 0.0, 0.0, 0
     tick = time.monotonic() + 0.5
@@ -38,8 +38,10 @@ def main() -> None:
             continue
         blocks += 1
         window_rms = max(window_rms, rms(block))
-        scores = wake._model.predict(block)
-        window_score = max(window_score, max(scores.values()))
+        event = wake.process(block)
+        if event:
+            print(f"  >>> {event.upper()}")
+        window_score = max(window_score, wake.take_max_score())
         if time.monotonic() >= tick:
             bar = "#" * int(min(window_score, 1) * 20)
             print(f"  rms {window_rms:.4f}  wake {window_score:.3f} {bar}")

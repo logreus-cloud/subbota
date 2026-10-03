@@ -22,6 +22,53 @@ def clean_for_speech(text: str) -> str:
     return " ".join(text.split())
 
 
+class _PiperEngine:
+    def __init__(self, cfg: VoiceConfig) -> None:
+        from piper import PiperVoice
+        self._voice = PiperVoice.load(str(cfg.piper_voice))
+        self.rate = self._voice.config.sample_rate
+
+    def synthesize(self, text: str, cancel: threading.Event):
+        for chunk in self._voice.synthesize(text):
+            if cancel.is_set():
+                return
+            yield chunk.audio_int16_array
+
+
+class _SileroEngine:
+    """Нейросетевые голоса Silero (PyTorch на CPU, ~0.15 с на фразу)."""
+
+    rate = 48000
+
+    def __init__(self, cfg: VoiceConfig) -> None:
+        import torch
+        torch.set_num_threads(4)
+        importer = torch.package.PackageImporter(str(cfg.silero_model))
+        self._model = importer.load_pickle("tts_models", "model")
+        self._model.to(torch.device("cpu"))
+        if cfg.silero_speaker not in self._model.speakers:
+            raise ValueError(f"Нет голоса Silero {cfg.silero_speaker!r}; есть: {', '.join(self._model.speakers)}")
+        self._speaker = cfg.silero_speaker
+
+    def synthesize(self, text: str, cancel: threading.Event):
+        from jarvis.voice.text_norm import normalize_for_tts
+        text = normalize_for_tts(text)
+        # Silero выбрасывает символы вне алфавита; если слов не осталось — молчим.
+        if not re.search(r"[а-яёА-ЯЁ]", text):
+            return
+        audio = self._model.apply_tts(text=text, speaker=self._speaker, sample_rate=self.rate)
+        if not cancel.is_set():
+            yield (audio.clamp(-1, 1) * 32767).numpy().astype(np.int16)
+
+
+def _make_engine(cfg: VoiceConfig):
+    if cfg.tts_engine == "silero":
+        return _SileroEngine(cfg)
+    if cfg.tts_engine == "piper":
+        return _PiperEngine(cfg)
+    raise ValueError(f"Неизвестный движок озвучки: {cfg.tts_engine!r}")
+
+
 @dataclass
 class _Task:
     text: str
@@ -49,8 +96,7 @@ class Speaker:
     def load(self) -> None:
         if self._voice is not None:
             return
-        from piper import PiperVoice
-        self._voice = PiperVoice.load(str(self.cfg.piper_voice))
+        self._voice = _make_engine(self.cfg)
 
     @property
     def is_speaking(self) -> bool:
@@ -92,10 +138,10 @@ class Speaker:
                 if task.cancel.is_set():
                     continue
                 chunks = []
-                for chunk in self._voice.synthesize(task.text):
+                for chunk in self._voice.synthesize(task.text, task.cancel):
                     if task.cancel.is_set():
                         break
-                    chunks.append(chunk.audio_int16_array)
+                    chunks.append(chunk)
                 if not task.cancel.is_set():
                     task.data = np.concatenate(chunks) if chunks else np.empty(0, dtype=np.int16)
             except Exception as exc:
@@ -157,14 +203,14 @@ class Speaker:
                     if index + 1 < len(sentences):
                         pending = self._submit(sentences[index + 1], cancel)
                     if data is not None and data.size:
-                        self._play(data, self._voice.config.sample_rate, cancel)
+                        self._play(data, self._voice.rate, cancel)
             finally:
                 self._speaking.clear()
 
     def beep(self, kind: str = "wake") -> None:
         pitches = {"wake": 880, "done": 660, "error": 330}
         duration = {"wake": 0.12, "done": 0.10, "error": 0.15}[kind]
-        rate = self._voice.config.sample_rate if self._voice is not None else 16000
+        rate = self._voice.rate if self._voice is not None else 16000
         times = np.arange(int(rate * duration)) / rate
         envelope = np.sin(np.linspace(0, np.pi, len(times))) ** 2
         tone = (np.sin(2 * np.pi * pitches[kind] * times) * envelope * 8192).astype(np.int16)

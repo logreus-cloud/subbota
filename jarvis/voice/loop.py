@@ -16,7 +16,7 @@ import numpy as np
 from jarvis.voice.audio import MicStream, rms
 from jarvis.voice.stt import Transcriber
 from jarvis.voice.tts import Speaker
-from jarvis.voice.wake import WakeWordDetector
+from jarvis.voice.wake import make_detector
 
 if TYPE_CHECKING:
     from jarvis.context import AppContext
@@ -87,7 +87,7 @@ class VoiceLoop:
         self.ctx = ctx
         self.cfg = ctx.cfg.voice
         self.mic = MicStream(self.cfg.input_device)
-        self.wake = WakeWordDetector(self.cfg.wake_threshold)
+        self.wake = make_detector(self.cfg)
         self.transcriber = Transcriber(self.cfg)
         self.speaker = Speaker(self.cfg)
         self._commands: queue.Queue[tuple] = queue.Queue()
@@ -371,8 +371,12 @@ class VoiceLoop:
         if self._muted:
             return
         if self._active_speech is not None:
-            if self.wake.process(block, threshold=min(1.0, self.cfg.wake_threshold + 0.2)):
+            # Перебивание: имя — замолчать и слушать новый вопрос, стоп-слово — просто замолчать.
+            event = self.wake.process(block, threshold=min(1.0, self.cfg.wake_threshold + 0.2))
+            if event == "wake":
                 self._barge_in()
+            elif event == "stop":
+                self._stop_word()
             return
         if self._recording_reserved or self._active_confirm is not None and self._state != "RECORDING":
             return
@@ -383,9 +387,10 @@ class VoiceLoop:
                 self._begin_recording(first=block)
         elif self._state == "IDLE":
             self._noise.append(rms(block))
-            if self.wake.process(block):
-                _LOG.info("Голос: wake word")
-                self._begin_recording(beep=True)
+            if self.wake.process(block) == "wake":
+                _LOG.info("Голос: обращение")
+                # Вопрос часто идёт сразу за именем: блок с именем оставляем в записи.
+                self._begin_recording(first=block, beep=True)
 
     def _begin_recording(
         self, first: np.ndarray | None = None, beep: bool = False,
@@ -397,8 +402,9 @@ class VoiceLoop:
             return
         self._recording_reserved = True
         if beep:
+            # Буфер микрофона не сбрасываем: «Джарвис, какая громкость» говорят
+            # на одном дыхании, и начало вопроса пришлось бы на сигнал.
             self.speaker.beep("wake")
-            self.mic.drain()
         now = time.monotonic()
         self._next_record_id += 1
         self._record_id = self._next_record_id
@@ -514,6 +520,12 @@ class VoiceLoop:
         if self._active_speech is not None:
             self._active_speech.interrupted = True
         self.speaker.stop()
+
+    def _stop_word(self) -> None:
+        _LOG.info("Голос: стоп-слово во время речи")
+        if self._active_confirm is not None:
+            self._resolve_confirm(self._active_confirm, False)
+        self._interrupt()
 
     def _barge_in(self) -> None:
         self._barge_speech()

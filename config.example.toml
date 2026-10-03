@@ -11,12 +11,18 @@ extra_instructions = "" # Дополнение к системному пром�
 
 [voice]
 enabled = true # Включить голос.
-wake_threshold = 0.5 # Порог ключевой фразы.
+wake_engine = "vosk" # Обращение: "vosk" — по имени, "openwakeword" — «Hey Jarvis».
+wake_word = "джарвис" # Имя-обращение для Vosk (должно быть в словаре модели).
+vosk_model = "models/vosk/vosk-model-small-ru-0.22" # Модель Vosk для обращения и «стоп».
+wake_threshold = 0.5 # Порог «Hey Jarvis» (только для openwakeword).
 whisper_model = "small" # Модель распознавания.
 whisper_device = "cuda" # Устройство распознавания.
 whisper_compute_type = "float16" # Тип вычислений.
 language = "ru" # Язык речи.
-piper_voice = "models/piper/ru_RU-denis-medium.onnx" # Файл голоса.
+tts_engine = "silero" # Озвучка: "silero" (нейросетевая) или "piper".
+silero_model = "models/silero/v5_1_ru.pt" # Модель Silero.
+silero_speaker = "xenia" # Голос Silero: aidar, eugene, baya, kseniya, xenia.
+piper_voice = "models/piper/ru_RU-denis-medium.onnx" # Голос Piper.
 # input_device = 0 # Устройство ввода: номер или имя; без ключа — системное.
 # output_device = 0 # Устройство вывода: номер или имя; без ключа — системное.
 follow_up_s = 6.0 # Ожидание следующей реплики.

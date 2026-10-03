@@ -34,11 +34,17 @@ class AgentConfig:
 @dataclass
 class VoiceConfig:
     enabled: bool = True
+    wake_engine: str = "vosk"
+    wake_word: str = "джарвис"
+    vosk_model: Path = Path("models/vosk/vosk-model-small-ru-0.22")
     wake_threshold: float = 0.5
     whisper_model: str = "small"
     whisper_device: str = "cuda"
     whisper_compute_type: str = "float16"
     language: str = "ru"
+    tts_engine: str = "silero"
+    silero_model: Path = Path("models/silero/v5_1_ru.pt")
+    silero_speaker: str = "xenia"
     piper_voice: Path = Path("models/piper/ru_RU-denis-medium.onnx")
     input_device: int | str | None = None
     output_device: int | str | None = None
@@ -137,5 +143,7 @@ def load_config(path: Path | None = None) -> Config:
     cfg.apps = raw.get("apps", {})
     cfg.general.data_dir = _resolve_path(root, cfg.general.data_dir)
     cfg.voice.piper_voice = _resolve_path(root, cfg.voice.piper_voice)
+    cfg.voice.silero_model = _resolve_path(root, cfg.voice.silero_model)
+    cfg.voice.vosk_model = _resolve_path(root, cfg.voice.vosk_model)
     cfg.code.workspace_roots = [_resolve_path(root, item) for item in cfg.code.workspace_roots]
     return cfg

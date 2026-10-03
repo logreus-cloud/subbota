@@ -10,6 +10,12 @@ Windows 11, Python 3.12, `uv`, Node.js и вход в Claude Code: запуст�
 
 ```powershell
 uv sync
+# Голос Silero (по умолчанию) и модель Vosk для обращения «Джарвис»
+New-Item -ItemType Directory -Force models/silero, models/vosk | Out-Null
+Invoke-WebRequest https://models.silero.ai/models/tts/ru/v5_1_ru.pt -OutFile models/silero/v5_1_ru.pt
+Invoke-WebRequest https://alphacephei.com/vosk/models/vosk-model-small-ru-0.22.zip -OutFile models/vosk/small-ru.zip
+Expand-Archive models/vosk/small-ru.zip models/vosk; Remove-Item models/vosk/small-ru.zip
+# Запасной голос Piper (tts_engine = "piper")
 uv run python -m piper.download_voices --data-dir models/piper ru_RU-denis-medium
 cd web
 npm install
@@ -20,7 +26,7 @@ npm run build
 
 ## Голос и управление
 
-Скажите «Hey Jarvis», затем произнесите запрос. «Стоп», «хватит», «замолчи» и «отмена» прерывают ответ. После ответа несколько секунд можно задать следующий вопрос без ключевой фразы.
+Скажите «Джарвис», затем произнесите запрос. «Стоп», «хватит», «замолчи» и «отмена» прерывают ответ. После ответа несколько секунд можно задать следующий вопрос без ключевой фразы.
 
 Действия, требующие прав, появляются в панели как запросы подтверждения. Их можно разрешить или отклонить; разрешение с запоминанием действует до конца сессии.
 
