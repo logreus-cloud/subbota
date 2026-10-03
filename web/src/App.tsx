@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Core } from './components/Core'
+import { Core, CoreActions } from './components/Core'
 import { Conversation } from './components/Conversation'
 import { SidePanel } from './components/SidePanel'
 import { useJarvis } from './useJarvis'
@@ -46,6 +46,7 @@ function App() {
         codeTasks={state.code_tasks}
         send={send}
         connected={state.connected}
+        controls={<CoreActions status={state.status} muted={state.mic_muted} connected={state.connected} send={send} />}
       />
     </div>
   )

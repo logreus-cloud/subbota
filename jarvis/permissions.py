@@ -25,6 +25,7 @@ _UNSAFE_GIT_OPTIONS = (
     "-o", "--output", "--ext-diff", "--exec", "-c",
     "--git-dir", "--work-tree", "--textconv",
 )
+_VOICE_DETAIL_LIMIT = 140
 _UNSAFE_JARVIS = {"power_action", "close_window", "set_clipboard", "cancel_code_task"}
 _UNSAFE_BROWSER = {"browser_file_upload", "browser_evaluate", "browser_run_code", "browser_install"}
 
@@ -194,11 +195,30 @@ class PermissionGate:
         )
         voice_task = None
         if self.ctx.voice is not None and not self.ctx.state["mic_muted"]:
-            question = f"{self.ctx.cfg.general.user_title}, разрешите: {title}?"
-            try:
-                voice_task = asyncio.create_task(self._voice_answer(approval.id, question))
-            except Exception:
-                _LOG.exception("Не удалось запросить голосовое подтверждение")
+            # Голосом подтверждают только то, что можно целиком произнести:
+            # иначе «да» уходит на команду, которую пользователь не слышал.
+            user_title = self.ctx.cfg.general.user_title
+            spoken = " ".join(detail.split())
+            if spoken and spoken in title:
+                spoken = ""
+            # Озвучка чистит текст (ссылки → «ссылка», убирает `*`, `>`, `_`):
+            # если чистка что-то меняет, пользователь услышит не то, что выполнится.
+            from jarvis.voice.tts import clean_for_speech
+            verbatim = all(
+                " ".join(clean_for_speech(part).split()) == " ".join(part.split())
+                for part in (title, spoken)
+            )
+            # У записи файлов содержимое не озвучивается вовсе — только панель.
+            writes_file = tool in {"Write", "Edit", "NotebookEdit"}
+            if verbatim and not writes_file and len(spoken) <= _VOICE_DETAIL_LIMIT:
+                tail = f". {spoken}?" if spoken else "?"
+                question = f"{user_title}, разрешите: {title}{tail}"
+                try:
+                    voice_task = asyncio.create_task(self._voice_answer(approval.id, question))
+                except Exception:
+                    _LOG.exception("Не удалось запросить голосовое подтверждение")
+            else:
+                self.ctx.voice.say(f"{user_title}, нужно подтверждение в панели: {title}.")
         try:
             allowed = await asyncio.wait_for(
                 asyncio.shield(approval.future), cfg_timeout(self.ctx)

@@ -25,10 +25,16 @@ class Transcriber:
         add_nvidia_dll_dirs()
         from faster_whisper import WhisperModel
         try:
-            self._model = WhisperModel(
+            model = WhisperModel(
                 self.cfg.whisper_model, device=self.cfg.whisper_device,
                 compute_type=self.cfg.whisper_compute_type,
             )
+            # Нехватка cuBLAS/cuDNN часто вылезает только на первом распознавании,
+            # поэтому прогреваем модель сразу и при ошибке уходим на CPU.
+            import numpy as np
+            segments, _ = model.transcribe(np.zeros(16000, dtype=np.float32), language=self.cfg.language)
+            list(segments)
+            self._model = model
         except Exception as exc:
             if self.cfg.whisper_device == "cpu":
                 raise

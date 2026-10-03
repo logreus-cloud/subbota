@@ -10,6 +10,7 @@ const initialState: JarvisState = {
   reminders: [],
   code_tasks: [],
   connected: false,
+  floor: 0,
 }
 
 type Action =
@@ -18,6 +19,8 @@ type Action =
   | { type: 'connected'; value: boolean }
   | { type: 'older'; events: Event[] }
   | { type: 'reminders'; reminders: JarvisState['reminders'] }
+
+let localErrors = 0
 
 function eventKey(event: Event) {
   return event.id
@@ -42,10 +45,14 @@ function taskId(task: CodeTask) {
 function reducer(state: JarvisState, action: Action): JarvisState {
   if (action.type === 'connected') return { ...state, connected: action.value }
   if (action.type === 'reminders') return { ...state, reminders: action.reminders }
-  if (action.type === 'older') return { ...state, events: mergeEvents(action.events, state.events) }
+  if (action.type === 'older') {
+    const older = action.events.filter((event) => event.id > state.floor)
+    return { ...state, events: mergeEvents(older, state.events) }
+  }
   if (action.type === 'snapshot') {
     const history = mergeEvents([], action.data.history)
     const resetIndex = history.findLastIndex((event) => event.type === 'session_reset')
+    const floor = Math.max(action.data.reset_floor ?? 0, resetIndex < 0 ? 0 : history[resetIndex].id)
     return {
       ...state,
       status: action.data.state.status,
@@ -55,6 +62,7 @@ function reducer(state: JarvisState, action: Action): JarvisState {
       reminders: action.data.reminders,
       code_tasks: action.data.code_tasks,
       connected: true,
+      floor,
     }
   }
   const event = action.data
@@ -65,6 +73,7 @@ function reducer(state: JarvisState, action: Action): JarvisState {
   }
   if (event.type === 'session_reset') {
     next.events = []
+    next.floor = event.id
     return next
   }
   if (event.type === 'approval_request') {
@@ -83,6 +92,12 @@ function reducer(state: JarvisState, action: Action): JarvisState {
     ]
   }
   if (event.id > 0) next.events = mergeEvents(state.events, [event])
+  else if (event.type === 'error') {
+    // Ошибки команд приходят без id: ставим их после последнего события.
+    localErrors += 1
+    const last = state.events.at(-1)?.id ?? state.floor
+    next.events = [...state.events, { ...event, id: last + localErrors / 1000 }]
+  }
   return next
 }
 
@@ -114,10 +129,13 @@ export function useJarvis() {
           if (data.type === 'snapshot') {
             const snapshot = data as Snapshot
             dispatch({ type: 'snapshot', data: snapshot })
-            setHasMore(snapshot.history.length >= 300)
+            const floor = snapshot.reset_floor ?? 0
+            const oldest = snapshot.history[0]?.id ?? 0
+            setHasMore(snapshot.history.length >= 300 && oldest > floor + 1)
           } else {
             const event = data as Event
             dispatch({ type: 'event', data: event })
+            if (event.type === 'session_reset') setHasMore(false)
             if (event.type === 'reminders_changed') {
               void getReminders().then((reminders) => {
                 if (!stopped) dispatch({ type: 'reminders', reminders })
@@ -129,7 +147,8 @@ export function useJarvis() {
         }
       }
       ws.onclose = () => {
-        if (socket.current === ws) socket.current = null
+        if (socket.current !== ws && socket.current !== null) return  // устаревший сокет
+        socket.current = null
         dispatch({ type: 'connected', value: false })
         if (!stopped) {
           retry = setTimeout(connect, delays[Math.min(attempts, delays.length - 1)])
@@ -153,7 +172,7 @@ export function useJarvis() {
   }, [])
 
   const loadOlder = useCallback(async () => {
-    const before = state.events[0]?.id
+    const before = state.events.find((event) => Number.isInteger(event.id))?.id
     if (!before || loading.current || !hasMore) return
     loading.current = true
     setLoadingOlder(true)

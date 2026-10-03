@@ -59,7 +59,7 @@ class Tray:
         if self.ctx.brain is not None:
             self.ctx.loop.call_soon_threadsafe(self.ctx.loop.create_task, self.ctx.brain.interrupt())
         if self.ctx.voice is not None:
-            self.ctx.voice.speaker.stop()
+            self.ctx.voice.stop_speaking()
 
     def _quit(self, icon, item):
         self.on_quit()

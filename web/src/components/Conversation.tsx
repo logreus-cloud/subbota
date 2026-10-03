@@ -11,6 +11,11 @@ function groupEvents(events: Event[]): Item[] {
   for (const event of events) {
     if (event.type === 'announcement' || event.type === 'error') {
       items.push({ kind: 'announcement', event })
+    } else if ('turn_id' in event && event.turn_id === 'system') {
+      // Фоновые сообщения группируем по соседству, а не в один «ход» на всё время.
+      const last = items.at(-1)
+      if (last?.kind === 'turn' && last.id.startsWith('system-')) last.events.push(event)
+      else items.push({ kind: 'turn', id: `system-${event.id}`, events: [event] })
     } else if ('turn_id' in event && event.turn_id) {
       let turn = turns.get(event.turn_id)
       if (!turn) {

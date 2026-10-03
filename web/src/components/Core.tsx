@@ -18,9 +18,35 @@ type Props = {
   send: (command: Command) => boolean
 }
 
-export function Core({ status, muted, connected, events, send }: Props) {
+type ActionsProps = Pick<Props, 'status' | 'muted' | 'connected' | 'send'>
+
+export function CoreActions({ status, muted, connected, send }: ActionsProps) {
   const [confirmReset, setConfirmReset] = useState(false)
-  const cost = events.reduce((total, event) => total + (event.type === 'turn_done' ? event.cost_usd : 0), 0)
+  return (
+    <div className="core-actions">
+      <button className="button" type="button" disabled={!connected} onClick={() => send({ type: 'mute', muted: !muted })}>
+        {muted ? 'Включить микрофон' : 'Выключить микрофон'}
+      </button>
+      <button className="button" type="button" disabled={!connected || !['thinking', 'speaking'].includes(status)} onClick={() => send({ type: 'interrupt' })}>
+        Прервать
+      </button>
+      <button className={`button${confirmReset ? ' danger' : ''}`} type="button" disabled={!connected} onClick={() => {
+        if (confirmReset) {
+          send({ type: 'reset' })
+          setConfirmReset(false)
+        } else {
+          setConfirmReset(true)
+        }
+      }}>
+        {confirmReset ? 'Точно?' : 'Новый разговор'}
+      </button>
+      {confirmReset && <button className="text-button" type="button" onClick={() => setConfirmReset(false)}>Отмена</button>}
+    </div>
+  )
+}
+
+export function Core({ status, muted, connected, events, send }: Props) {
+  const cost = events.reduce((total, event) => total + (event.type === 'turn_done' ? event.cost_usd ?? 0 : 0), 0)
 
   return (
     <aside className="core-column">
@@ -42,25 +68,7 @@ export function Core({ status, muted, connected, events, send }: Props) {
         <span className={`connection-dot${connected ? ' online' : ''}`} />
         {connected ? 'Сервер подключён' : 'Нет соединения с сервером'}
       </div>
-      <div className="core-actions">
-        <button className="button" type="button" disabled={!connected} onClick={() => send({ type: 'mute', muted: !muted })}>
-          {muted ? 'Включить микрофон' : 'Выключить микрофон'}
-        </button>
-        <button className="button" type="button" disabled={!connected || !['thinking', 'speaking'].includes(status)} onClick={() => send({ type: 'interrupt' })}>
-          Прервать
-        </button>
-        <button className={`button${confirmReset ? ' danger' : ''}`} type="button" disabled={!connected} onClick={() => {
-          if (confirmReset) {
-            send({ type: 'reset' })
-            setConfirmReset(false)
-          } else {
-            setConfirmReset(true)
-          }
-        }}>
-          {confirmReset ? 'Точно?' : 'Новый разговор'}
-        </button>
-        {confirmReset && <button className="text-button" type="button" onClick={() => setConfirmReset(false)}>Отмена</button>}
-      </div>
+      <CoreActions status={status} muted={muted} connected={connected} send={send} />
       <div className="session-cost"><span>Стоимость сессии</span><strong>${cost.toFixed(4)}</strong></div>
     </aside>
   )

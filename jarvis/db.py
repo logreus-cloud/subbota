@@ -52,6 +52,13 @@ class Database:
             for row in rows
         ]
 
+    def last_event_id(self, type: str) -> int:
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT MAX(id) FROM events WHERE type = ?", (type,)
+            ).fetchone()
+        return int(row[0] or 0)
+
     def kv_get(self, key: str) -> str | None:
         with self._lock:
             row = self._conn.execute("SELECT value FROM kv WHERE key = ?", (key,)).fetchone()

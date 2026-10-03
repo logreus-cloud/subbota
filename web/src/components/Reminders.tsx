@@ -4,7 +4,7 @@ import type { Reminder } from '../types'
 
 function nextRun(reminder: Reminder) {
   if (reminder.recurrence) return `Повтор: ${reminder.recurrence}`
-  const raw = reminder.next_run ?? reminder.next_run_time ?? reminder.when
+  const raw = reminder.next_run ?? reminder.run_at
   if (!raw) return 'Время не указано'
   const date = new Date(raw)
   if (Number.isNaN(date.getTime())) return raw
@@ -22,7 +22,7 @@ function nextRun(reminder: Reminder) {
 export function Reminders({ reminders }: { reminders: Reminder[] }) {
   const [list, setList] = useState(reminders)
   const [text, setText] = useState('')
-  const [kind, setKind] = useState<'say' | 'task'>('say')
+  const [kind, setKind] = useState<'say' | 'agent'>('say')
   const [schedule, setSchedule] = useState<'once' | 'cron'>('once')
   const [when, setWhen] = useState('')
   const [cron, setCron] = useState('')
@@ -74,7 +74,7 @@ export function Reminders({ reminders }: { reminders: Reminder[] }) {
       {list.length === 0 ? <div className="empty-state">Напоминаний нет</div> : list.map((reminder) => (
         <article className="card" key={reminder.id}>
           <div className="row-between"><strong>{reminder.text}</strong><button className="text-button" type="button" onClick={() => void remove(reminder.id)}>Удалить</button></div>
-          <div className="card-meta">{reminder.kind === 'task' ? 'Задача' : 'Сказать'} · {nextRun(reminder)}</div>
+          <div className="card-meta">{reminder.kind === 'agent' ? 'Задача' : 'Сказать'} · {nextRun(reminder)}</div>
         </article>
       ))}
       <form className="card form-grid" onSubmit={(event) => void submit(event)}>
@@ -83,9 +83,9 @@ export function Reminders({ reminders }: { reminders: Reminder[] }) {
           <textarea className="field" rows={3} maxLength={20000} required value={text} onChange={(event) => setText(event.target.value)} />
         </label>
         <label className="field-label">Тип
-          <select className="field" value={kind} onChange={(event) => setKind(event.target.value as 'say' | 'task')}>
+          <select className="field" value={kind} onChange={(event) => setKind(event.target.value as 'say' | 'agent')}>
             <option value="say">Сказать</option>
-            <option value="task">Задача</option>
+            <option value="agent">Задача</option>
           </select>
         </label>
         <label className="field-label">Расписание

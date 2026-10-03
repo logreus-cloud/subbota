@@ -25,7 +25,7 @@ export const addReminder = (body: {
   text: string
   when: string | null
   recurrence?: string | null
-  kind: 'say' | 'task'
+  kind: 'say' | 'agent'
 }) => request<Reminder>('/api/reminders', json('POST', body))
 
 export const deleteReminder = (id: number) =>

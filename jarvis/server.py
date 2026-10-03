@@ -56,10 +56,12 @@ def create_app(ctx) -> FastAPI:
         try:
             history = await asyncio.to_thread(ctx.db.events, None, 300)
             snapshot_id = history[-1]["id"] if history else 0
+            reset_floor = await asyncio.to_thread(ctx.db.last_event_id, "session_reset")
             await websocket.send_json({
                 "type": "snapshot",
                 "state": dict(ctx.state),
                 "history": history,
+                "reset_floor": reset_floor,
                 "approvals": ctx.gate.pending() if ctx.gate else [],
                 "reminders": await ctx.scheduler.list() if ctx.scheduler else [],
                 "code_tasks": ctx.code_tasks.list() if ctx.code_tasks else [],
@@ -91,7 +93,7 @@ def create_app(ctx) -> FastAPI:
                         elif command == "interrupt":
                             await ctx.brain.interrupt()
                             if ctx.voice is not None:
-                                ctx.voice.speaker.stop()
+                                ctx.voice.stop_speaking()
                         elif command == "reset":
                             await ctx.brain.reset()
                         elif command == "mute":

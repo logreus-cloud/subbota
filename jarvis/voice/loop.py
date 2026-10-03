@@ -22,30 +22,36 @@ if TYPE_CHECKING:
     from jarvis.context import AppContext
 
 _LOG = logging.getLogger(__name__)
-_STOP = re.compile(r"^(?:стоп|хватит|замолчи|отмена)\b")
-_NO = {"нет", "отмена", "отменить", "запрещаю", "нельзя"}
-_YES = {"да", "разрешаю", "давай", "ок", "выполняй"}
+_ECHO_GUARD_S = 0.35
+_STOP = re.compile(r"^(?:джарвис\W*)?(?:стоп|хватит|замолчи|отмена)\b")
+_NO = {
+    "нет", "отмена", "отменить", "отмени", "запрещаю", "нельзя", "не",
+    "стоп", "стой", "погоди", "подожди", "потом", "позже", "хватит",
+}
+# Согласие засчитывается, только если вся фраза из этих слов: «да, но подожди»,
+# «давай не будем» или «да что ты делаешь» не должны разрешать действие.
+_YES = {
+    "да", "разрешаю", "давай", "ок", "окей", "выполняй", "выполни", "конечно",
+    "подтверждаю", "можно", "ага", "угу", "хорошо", "ладно", "пожалуйста",
+    "джарвис", "сэр",
+}
+_YES_CORE = _YES - {"пожалуйста", "джарвис", "сэр"}
 
 
 def parse_yes_no(text: str) -> bool | None:
     words = re.findall(r"[а-яёa-z]+", text.casefold())
-    denied = False
-    agreed = False
-    for index, word in enumerate(words):
-        if word == "не" and index + 1 < len(words) and words[index + 1] == "надо":
-            denied = True
-        if word in _NO:
-            denied = True
-        if word in _YES:
-            if index > 0 and words[index - 1] == "не":
-                denied = True
-            else:
-                agreed = True
-    if denied and agreed:
+    if not words:
         return None
-    if denied:
-        return False
-    if agreed:
+    if any(word in _NO for word in words):
+        # «нет», «не надо», «не разрешаю» — отказ; отказ вперемешку с другим
+        # согласием («да нет», «давай не будем») тоже не разрешает, но и не
+        # считается чётким ответом.
+        free_yes = [
+            word for index, word in enumerate(words)
+            if word in _YES_CORE and not (index > 0 and words[index - 1] == "не")
+        ]
+        return None if free_yes else False
+    if all(word in _YES for word in words) and any(word in _YES_CORE for word in words):
         return True
     return None
 
@@ -137,6 +143,10 @@ class VoiceLoop:
         result: Future[bool | None] = Future()
         if not self._enqueue(("confirm", question, timeout, result)):
             _safe_set(result, None)
+            return result
+        # Если подтверждение решили в панели, гейт отменяет future: автомат
+        # должен перестать задавать вопрос и слушать ответ.
+        result.add_done_callback(lambda done: self._enqueue(("confirm_done", done)))
         return result
 
     def set_muted(self, muted: bool) -> None:
@@ -191,21 +201,24 @@ class VoiceLoop:
                         self.mic.restart()
                         time.sleep(0.05)
         finally:
+            with self._lifecycle:
+                self._closed.set()
             self._stopping = True
             self.speaker.stop()
             self._talker_jobs.put(None)
             self._stt_jobs.put(None)
             if self._talker is not None:
-                self._talker.join()
+                self._talker.join(timeout=5)
             if self._stt_thread is not None:
                 self._stt_thread.join(timeout=3)
             self.speaker.close()
             self.mic.stop()
             self._drain_commands()
             self._cancel_confirms()
-            with self._lifecycle:
-                self._closed.set()
-            self.ctx.set_status("idle")
+            try:
+                self.ctx.set_status("idle")
+            except RuntimeError:
+                pass  # главный loop уже закрыт
 
     def _talk(self) -> None:
         while True:
@@ -285,6 +298,10 @@ class VoiceLoop:
             self._barge_speech()
             if self._active_confirm is not None:
                 self._resolve_confirm(self._active_confirm, None)
+        elif kind == "confirm_done":
+            active = self._active_confirm
+            if active is not None and active.future is args[0]:
+                self._resolve_confirm(active, None)
         elif kind == "speech_done":
             self._on_speech_done(*args)
         elif kind == "transcribed":
@@ -425,11 +442,17 @@ class VoiceLoop:
             return
         if _STOP.match(text.casefold()):
             if active is not None:
-                self._resolve_confirm(active, None)
+                # «Стоп» в ответ на вопрос — это отказ в действии, а не прерывание хода.
+                self._resolve_confirm(active, False)
+                return
             self._interrupt()
             return
         if active is not None:
-            self._resolve_confirm(active, parse_yes_no(text))
+            answer = parse_yes_no(text)
+            if answer is None and text and time.monotonic() < active.deadline - 1.0:
+                self._begin_recording(confirm=active)
+                return
+            self._resolve_confirm(active, answer)
             return
         if text and self.ctx.brain is not None:
             future = asyncio.run_coroutine_threadsafe(
@@ -451,12 +474,12 @@ class VoiceLoop:
             self._state = "IDLE"
 
     def _interrupt(self) -> None:
+        self._reply_generation += 1
         if self.ctx.brain is not None:
             asyncio.run_coroutine_threadsafe(self.ctx.brain.interrupt(), self.ctx.loop)
         self._barge_speech()
 
     def _barge_speech(self) -> None:
-        self._reply_generation += 1
         for job in self._speeches:
             if job.follow_up:
                 job.interrupted = True
@@ -509,14 +532,21 @@ class VoiceLoop:
             if job.interrupted or self._muted or self._stopping:
                 self._resolve_confirm(active, None)
             else:
+                self._settle_after_speech()
                 active.deadline = time.monotonic() + max(0.0, active.timeout)
                 self._begin_recording(confirm=active)
         elif job.follow_up and not job.interrupted and not self._muted and (
             self._active_confirm is None and self._state == "IDLE"
         ):
+            self._settle_after_speech()
             self._follow_up_until = time.monotonic() + self.cfg.follow_up_s
             if self.cfg.follow_up_s > 0:
                 self._state = "FOLLOW_UP"
+
+    def _settle_after_speech(self) -> None:
+        # Хвост собственной речи и реверберация не должны попасть в запись.
+        time.sleep(_ECHO_GUARD_S)
+        self.mic.drain()
 
     def _on_brain_done(self, future: Future) -> None:
         generation = self._pending.pop(future, None)
@@ -528,10 +558,13 @@ class VoiceLoop:
             _LOG.exception("Не удалось получить голосовой ответ")
             self.ctx.bus.publish("error", message=str(exc))
             return
-        if generation == self._reply_generation and result.text and not (
-            result.is_error and result.text == "Прервано"
-        ):
-            self._speeches.append(self._new_speech(result.text, follow_up=True))
+        if generation != self._reply_generation or not result.text:
+            return
+        if result.is_error:
+            if result.text not in {"Прервано", "Остановлено"}:
+                self._speeches.append(self._new_speech("Не получилось, подробности в панели."))
+            return
+        self._speeches.append(self._new_speech(result.text, follow_up=True))
 
     def _maybe_start_confirm(self) -> None:
         if self._active_confirm is not None or self._state not in {"IDLE", "FOLLOW_UP"} or (

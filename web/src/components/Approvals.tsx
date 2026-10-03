@@ -10,12 +10,13 @@ function ApprovalCard({ approval, send, connected }: {
   const [seconds, setSeconds] = useState(0)
   useEffect(() => {
     function update() {
-      setSeconds(approval.ts ? Math.max(0, Math.floor((Date.now() - new Date(approval.ts).getTime()) / 1000)) : 0)
+      const since = approval.ts ?? approval.created_at
+      setSeconds(since ? Math.max(0, Math.floor((Date.now() - new Date(since).getTime()) / 1000)) : 0)
     }
     update()
     const timer = setInterval(update, 1000)
     return () => clearInterval(timer)
-  }, [approval.ts])
+  }, [approval.ts, approval.created_at])
 
   const id = approval.approval_id ?? approval.id
   const long = approval.detail.split('\n').length > 12

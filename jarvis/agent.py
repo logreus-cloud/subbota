@@ -73,6 +73,7 @@ class Brain:
         self._reset_future: asyncio.Future | None = None
         self._interrupted = False
         self._state = "stopped"
+        self._stop_task: asyncio.Task | None = None
         self._backoff = 0
 
     @property
@@ -123,12 +124,26 @@ class Brain:
         await future
 
     async def stop(self) -> None:
-        if self._state == "stopped":
+        # Остановка — общая задача: отмена того, кто её ждёт, не прерывает очистку
+        # и не оставляет мозг навсегда в состоянии stopping.
+        if self._state == "stopped" and not self._stopping_now():
             return
-        if self._state == "stopping":
-            if self._worker_task is not None:
-                await self._worker_task
-            return
+        if not self._stopping_now():
+            self._stop_task = asyncio.create_task(self._stop_impl())
+        await asyncio.shield(self._stop_task)
+
+    def _stopping_now(self) -> bool:
+        return self._stop_task is not None and not self._stop_task.done()
+
+    async def _stop_impl(self) -> None:
+        try:
+            await self._shutdown()
+        finally:
+            self._state = "stopped"
+            if self._stop_task is asyncio.current_task():
+                self._stop_task = None
+
+    async def _shutdown(self) -> None:
         self._state = "stopping"
         while not self._queue.empty():
             item = self._queue.get_nowait()
@@ -150,8 +165,9 @@ class Brain:
                     await self._worker_task
                 except asyncio.CancelledError:
                     pass
+            except Exception:
+                _LOG.exception("Worker мозга завершился с ошибкой")
             self._worker_task = None
-        self._state = "stopped"
 
     def _reject(self, item: tuple[str, str, str, asyncio.Future | None] | None) -> None:
         if item is None or item[3] is None or item[3].done():
@@ -242,11 +258,28 @@ class Brain:
                 message_task = None
                 queue_task = None
                 parts: list[str] = []
-                events: list[tuple[str, dict[str, Any]]] = []
                 resetting = False
                 failed = False
                 try:
                     while self._state == "running":
+                        # Отложенный запрос запускаем сразу, как только нет активного хода,
+                        # в том числе после переподключения, когда поток SDK ещё молчит.
+                        if pending is not None and self._active is None:
+                            turn_id, text, source, future = pending
+                            pending = None
+                            if source == "__reset__":
+                                self._reset_future = future
+                                resetting = True
+                                break
+                            self._active = (turn_id, future)
+                            self._interrupted = False
+                            parts.clear()
+                            self.ctx.set_status("thinking")
+                            now = datetime.now().astimezone()
+                            label = _SOURCES.get(source, source)
+                            prefix = f"[{label} · {now:%Y-%m-%d %H:%M}, {_DAYS[now.weekday()]}] "
+                            await self._client.query(prefix + text)
+                            continue
                         if message_task is None:
                             message_task = asyncio.create_task(anext(stream))
                         if pending is None and queue_task is None:
@@ -258,27 +291,12 @@ class Brain:
                         if message_task in done:
                             message = message_task.result()
                             message_task = None
-                            self._handle_message(message, parts, events)
+                            self._handle_message(message, parts)
                         if queue_task in done:
                             pending = queue_task.result()
                             queue_task = None
                             if pending is None:
                                 break
-                        if self._state != "running" or pending is None or self._active is not None:
-                            continue
-                        turn_id, text, source, future = pending
-                        pending = None
-                        if source == "__reset__":
-                            self._reset_future = future
-                            resetting = True
-                            break
-                        self._active = (turn_id, future)
-                        self._interrupted = False
-                        self.ctx.set_status("thinking")
-                        now = datetime.now().astimezone()
-                        label = _SOURCES.get(source, source)
-                        prefix = f"[{label} · {now:%Y-%m-%d %H:%M}, {_DAYS[now.weekday()]}] "
-                        await self._client.query(prefix + text)
                 except asyncio.CancelledError:
                     raise
                 except Exception as exc:
@@ -334,6 +352,10 @@ class Brain:
                     except Exception:
                         _LOG.exception("Ошибка отключения Claude")
         finally:
+            # Сразу закрываем приём: ask/reset после этой точки получат отказ,
+            # а не повиснут в уже очищенной очереди.
+            if self._state == "running":
+                self._state = "stopping"
             self._reject(pending)
             while not self._queue.empty():
                 self._reject(self._queue.get_nowait())
@@ -349,42 +371,41 @@ class Brain:
                 await self._disconnect()
             except Exception:
                 _LOG.exception("Ошибка отключения Claude")
-            if self._state == "running":
+            if not self._stopping_now():
                 self._state = "stopped"
 
-    def _handle_message(
-        self, message: Any, parts: list[str], events: list[tuple[str, dict[str, Any]]]
-    ) -> None:
+    def _handle_message(self, message: Any, parts: list[str]) -> None:
+        # Блоки публикуются сразу, чтобы панель показывала ход вживую. Пока есть
+        # активный ход, они относятся к нему: SDK не помечает origin у
+        # AssistantMessage, а фоновые ходы посреди нашего — редкость.
+        turn_id = self._active[0] if self._active is not None else "system"
         if isinstance(message, AssistantMessage):
             for block in message.content:
                 if isinstance(block, TextBlock):
-                    parts.append(block.text)
+                    if self._active is not None and not getattr(message, "parent_tool_use_id", None):
+                        parts.append(block.text)
+                    self.ctx.bus.publish("assistant_message", turn_id=turn_id, text=block.text)
                 elif isinstance(block, ToolUseBlock):
-                    events.append(("tool_call", {
-                        "tool_use_id": block.id, "name": block.name,
-                        "input": _clip(block.input, 2000),
-                    }))
+                    self.ctx.bus.publish(
+                        "tool_call", turn_id=turn_id, tool_use_id=block.id,
+                        name=block.name, input=_clip(block.input, 2000),
+                    )
         elif isinstance(message, UserMessage) and isinstance(message.content, list):
             for block in message.content:
                 if isinstance(block, ToolResultBlock):
-                    events.append(("tool_result", {
-                        "tool_use_id": block.tool_use_id, "is_error": bool(block.is_error),
-                        "text": _result_text(block.content),
-                    }))
+                    self.ctx.bus.publish(
+                        "tool_result", turn_id=turn_id, tool_use_id=block.tool_use_id,
+                        is_error=bool(block.is_error), text=_result_text(block.content),
+                    )
         elif isinstance(message, ResultMessage):
             own_result = (
                 self._active is not None
                 and (message.origin is None or message.origin["kind"] == "human")
             )
-            turn_id = self._active[0] if own_result else "system"
-            for event, payload in events:
-                self.ctx.bus.publish(event, turn_id=turn_id, **payload)
             if own_result:
                 future = self._active[1]
                 if message.session_id:
                     self.ctx.db.kv_set("session_id", message.session_id)
-                for part in parts:
-                    self.ctx.bus.publish("assistant_message", turn_id=turn_id, text=part)
                 interrupted = self._interrupted or message.terminal_reason in {
                     "aborted_streaming", "aborted_tools",
                 }
@@ -404,9 +425,8 @@ class Brain:
                     future.set_result(TurnResult(turn_id, result, is_error))
                 self._active = None
                 self.ctx.set_status("idle")
+                parts.clear()
             else:
-                text = message.result or "".join(parts)
-                if text:
-                    self.ctx.bus.publish("assistant_message", turn_id="system", text=text)
-            parts.clear()
-            events.clear()
+                # Текст фонового хода уже опубликован блоками; наш ход, если он
+                # идёт, продолжается, поэтому parts не трогаем.
+                _LOG.info("Завершён фоновый ход (origin=%s)", message.origin)

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import type { Approval, CodeTask, Command, Reminder } from '../types'
 import { Approvals } from './Approvals'
 import { Reminders } from './Reminders'
@@ -15,7 +15,7 @@ const tabs: { id: Tab; label: string }[] = [
   { id: 'system', label: 'Система' },
 ]
 
-export function SidePanel({ open, onClose, approvals, reminders, codeTasks, send, connected }: {
+export function SidePanel({ open, onClose, approvals, reminders, codeTasks, send, connected, controls }: {
   open: boolean
   onClose: () => void
   approvals: Approval[]
@@ -23,6 +23,8 @@ export function SidePanel({ open, onClose, approvals, reminders, codeTasks, send
   codeTasks: CodeTask[]
   send: (command: Command) => boolean
   connected: boolean
+  /** Управление для узких экранов, где колонка ядра скрыта */
+  controls?: ReactNode
 }) {
   const [tab, setTab] = useState<Tab>('approvals')
   const [previousCount, setPreviousCount] = useState(approvals.length)
@@ -48,6 +50,7 @@ export function SidePanel({ open, onClose, approvals, reminders, codeTasks, send
         <h2>Панель</h2>
         <button className="button compact side-close" type="button" onClick={onClose}>Закрыть</button>
       </div>
+      {controls && <div className="mobile-controls">{controls}</div>}
       <nav className="tabs" aria-label="Разделы панели">
         {tabs.map((item) => <button
           className={`tab${tab === item.id ? ' active' : ''}`}

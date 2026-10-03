@@ -6,7 +6,8 @@ import { ToolCard } from './ToolCard'
 export function Markdown({ text }: { text: string }) {
   return (
     <div className="markdown">
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
+      {/* Картинки не грузим: текст может прийти из веба и утечь данные через URL. */}
+      <ReactMarkdown remarkPlugins={[remarkGfm]} disallowedElements={['img']} unwrapDisallowed components={{
         a: ({ node: _node, ...props }) => <a {...props} target="_blank" rel="noreferrer" />,
       }}>{text}</ReactMarkdown>
     </div>
@@ -46,7 +47,7 @@ export function TurnView({ events }: { events: Event[] }) {
       {done?.type === 'turn_done' && done.is_error && blocks.length === 0 && <div className="announcement error">{done.result || 'Ошибка при выполнении запроса'}</div>}
       <div className="turn-meta">
         {stamp && new Date(stamp).toLocaleString('ru-RU', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' })}
-        {done?.type === 'turn_done' && <> · ${done.cost_usd.toFixed(4)}</>}
+        {done?.type === 'turn_done' && typeof done.cost_usd === 'number' && <> · ${done.cost_usd.toFixed(4)}</>}
       </div>
     </article>
   )
