@@ -14,8 +14,10 @@ _HALLUCINATIONS = re.compile(
 
 
 class Transcriber:
-    def __init__(self, cfg: VoiceConfig) -> None:
+    def __init__(self, cfg: VoiceConfig, hotwords: str | None = None) -> None:
         self.cfg = cfg
+        # Подсказка распознавателю: имя ассистентки и названия проектов.
+        self.hotwords = hotwords
         self._model = None
 
     def load(self) -> None:
@@ -54,6 +56,7 @@ class Transcriber:
             beam_size=5,
             vad_filter=True,
             initial_prompt="Суббота, ",
+            hotwords=self.hotwords,
         )
         text = " ".join(segment.text for segment in segments).strip()
         text = _HALLUCINATIONS.sub("", text).strip(" \t\n.!?…")

@@ -40,6 +40,16 @@ _YES = {
 _YES_CORE = _YES - {"пожалуйста", "суббота", "сэр"}
 
 
+def _hotwords(ctx: AppContext) -> str:
+    names = []
+    for root in ctx.cfg.code.workspace_roots:
+        try:
+            names += [d.name for d in root.iterdir() if d.is_dir() and not d.name.startswith(".")]
+        except OSError:
+            pass
+    return " ".join([ctx.cfg.general.assistant_name, *sorted(set(names))[:40]])
+
+
 def parse_yes_no(text: str) -> bool | None:
     words = re.findall(r"[а-яёa-z]+", text.casefold())
     if not words:
@@ -88,7 +98,7 @@ class VoiceLoop:
         self.cfg = ctx.cfg.voice
         self.mic = MicStream(self.cfg.input_device)
         self.wake = make_detector(self.cfg)
-        self.transcriber = Transcriber(self.cfg)
+        self.transcriber = Transcriber(self.cfg, _hotwords(ctx))
         self.speaker = Speaker(self.cfg)
         self._commands: queue.Queue[tuple] = queue.Queue()
         self._talker_jobs: queue.Queue[tuple[int, str, int] | None] = queue.Queue()

@@ -38,7 +38,7 @@ class VoiceConfig:
     wake_word: str = "суббота"
     vosk_model: Path = Path("models/vosk/vosk-model-small-ru-0.22")
     wake_threshold: float = 0.5
-    whisper_model: str = "small"
+    whisper_model: str = "large-v3-turbo"
     whisper_device: str = "cuda"
     whisper_compute_type: str = "float16"
     language: str = "ru"
