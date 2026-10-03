@@ -25,3 +25,14 @@ dependencies = [
     "uvicorn[standard]>=0.54.0",
     "vosk>=0.3.45",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+markers = ["slow: долгие тесты с моделями голоса (Silero, Vosk)"]
+filterwarnings = ["ignore::DeprecationWarning", "ignore::UserWarning"]
