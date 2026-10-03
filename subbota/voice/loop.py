@@ -493,11 +493,17 @@ class VoiceLoop:
             return
         if active is not None:
             answer = parse_yes_no(text)
-            if answer is None and text and time.monotonic() < active.deadline - 1.0:
-                self._begin_recording(confirm=active)
+            first = (re.findall(r"[а-яёa-z]+", text.casefold()) or [""])[0]
+            if answer is None and len(text.split()) >= 3 and first not in _YES_CORE | _NO:
+                # Вместо «да/нет» пришла новая команда: подтверждение снимет мозг
+                # (supersede), а фразу отправляем как обычный запрос.
+                self._resolve_confirm(active, None)
+            else:
+                if answer is None and text and time.monotonic() < active.deadline - 1.0:
+                    self._begin_recording(confirm=active)
+                    return
+                self._resolve_confirm(active, answer)
                 return
-            self._resolve_confirm(active, answer)
-            return
         if text and self.ctx.brain is not None:
             future = asyncio.run_coroutine_threadsafe(
                 self.ctx.brain.ask(text, "voice"), self.ctx.loop,

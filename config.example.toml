@@ -43,7 +43,8 @@ safe_shell = [ # Команды только для чтения; огранич
   '(?i)^(cat|type|where|where\.exe)\s+.+$',
   '(?i)^git\s+(status|log|diff|show|branch)(?:\s+.+)?$',
 ]
-approval_timeout_s = 180 # Время ожидания подтверждения.
+shell_policy = "balanced" # balanced — опасное спрашивать, остальное сразу; strict — только safe_shell.
+approval_timeout_s = 90 # Время ожидания подтверждения.
 
 [browser]
 enabled = true # Подключить Playwright MCP.

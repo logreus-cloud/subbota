@@ -14,6 +14,8 @@ from uuid import uuid4
 from claude_agent_sdk import PermissionResultAllow, PermissionResultDeny, ToolPermissionContext
 from claude_agent_sdk.types import HookCallback, HookContext, HookInput, HookJSONOutput
 
+from subbota.shell_risk import PANEL_ONLY, shell_risk
+
 if TYPE_CHECKING:
     from subbota.context import AppContext
 
@@ -26,7 +28,7 @@ _UNSAFE_GIT_OPTIONS = (
     "--git-dir", "--work-tree", "--textconv",
 )
 _VOICE_DETAIL_LIMIT = 140
-_UNSAFE_СУББОТА = {"power_action", "close_window", "set_clipboard", "cancel_code_task"}
+_UNSAFE_SUBBOTA = {"power_action", "close_window", "set_clipboard", "cancel_code_task"}
 _UNSAFE_BROWSER = {"browser_file_upload", "browser_evaluate", "browser_run_code", "browser_install"}
 
 
@@ -87,6 +89,7 @@ class Approval:
     source: str
     created_at: str
     future: asyncio.Future[bool]
+    resolved_by: str = ""
 
     def to_dict(self) -> dict:
         return {
@@ -139,7 +142,7 @@ class PermissionGate:
         if (
             tool_name in _SAFE_TOOLS
             or tool_name.startswith("mcp__subbota__")
-            and tool_name.removeprefix("mcp__subbota__") not in _UNSAFE_СУББОТА
+            and tool_name.removeprefix("mcp__subbota__") not in _UNSAFE_SUBBOTA
             or tool_name.startswith("mcp__playwright__browser_")
             and tool_name.removeprefix("mcp__playwright__") not in _UNSAFE_BROWSER
             or any(fnmatch.fnmatchcase(tool_name, pattern) for pattern in cfg.auto_allow)
@@ -151,6 +154,8 @@ class PermissionGate:
             bash_escape = tool_name == "Bash" and "\\" in command
             if not bash_escape and is_safe_shell(command, cfg.safe_shell):
                 return self._allow(tool_name, tool_input, "безопасная команда")
+            if cfg.shell_policy == "balanced" and shell_risk(command, tool_name) is None:
+                return self._allow(tool_name, tool_input, "без признаков опасности")
         if tool_name in {"Write", "Edit", "NotebookEdit"}:
             if path is not None and path.is_relative_to(root):
                 return self._allow(tool_name, tool_input, "рабочая папка")
@@ -168,16 +173,22 @@ class PermissionGate:
         scope: str | CodeScope,
     ) -> PermissionResultAllow | PermissionResultDeny:
         path = tool_input.get("file_path") or tool_input.get("notebook_path")
+        risk = None
         if tool in {"Bash", "PowerShell"}:
-            title = "Выполнить команду PowerShell" if tool == "PowerShell" else "Выполнить команду"
             detail = str(tool_input.get("command", ""))
+            risk = shell_risk(detail, tool)
+            description = str(tool_input.get("description") or "").strip().rstrip(".")
+            title = description or ("Выполнить команду PowerShell" if tool == "PowerShell" else "Выполнить команду")
+            if risk:
+                title = f"{title} ({risk})"
         elif tool in {"Write", "Edit", "NotebookEdit"}:
             title = f"Записать файл {path}"
             detail = str(path)
         else:
             title = f"Вызвать инструмент {tool}"
             detail = json.dumps(tool_input, ensure_ascii=False, default=str)
-        title = context.title or title if context is not None else title
+        if context is not None and context.title:
+            title = f"{context.title} ({risk})" if risk else context.title
         approval = Approval(
             id=uuid4().hex,
             tool=tool,
@@ -201,6 +212,9 @@ class PermissionGate:
             spoken = " ".join(detail.split())
             if spoken and spoken in title:
                 spoken = ""
+            if tool in {"Bash", "PowerShell"} and tool_input.get("description") and risk not in PANEL_ONLY:
+                # Команду озвучивает её описание; сама команда — в панели.
+                spoken = ""
             # Озвучка чистит текст (ссылки → «ссылка», убирает `*`, `>`, `_`):
             # если чистка что-то меняет, пользователь услышит не то, что выполнится.
             from subbota.voice.tts import clean_for_speech
@@ -210,9 +224,10 @@ class PermissionGate:
             )
             # У записи файлов содержимое не озвучивается вовсе — только панель.
             writes_file = tool in {"Write", "Edit", "NotebookEdit"}
-            if verbatim and not writes_file and len(spoken) <= _VOICE_DETAIL_LIMIT:
+            panel_only = risk in PANEL_ONLY
+            if verbatim and not writes_file and not panel_only and len(spoken) <= _VOICE_DETAIL_LIMIT:
                 tail = f". {spoken}?" if spoken else "?"
-                question = f"{user_title}, разрешите: {title}{tail}"
+                question = f"{user_title}, разрешите: {title}{tail} Да или нет?"
                 try:
                     voice_task = asyncio.create_task(self._voice_answer(approval.id, question))
                 except Exception:
@@ -234,7 +249,11 @@ class PermissionGate:
             self._pending.pop(approval.id, None)
         if allowed:
             return PermissionResultAllow(updated_input=tool_input)
-        return PermissionResultDeny(message="Пользователь отказал в действии")
+        reason = {
+            "timeout": "Подтверждения не дождались — действие не выполнено.",
+            "superseded": "Пользователь перешёл к новому запросу — действие не выполнено.",
+        }.get(approval.resolved_by, "Пользователь отказал в действии.")
+        return PermissionResultDeny(message=reason)
 
     async def _voice_answer(self, approval_id: str, question: str) -> None:
         try:
@@ -252,11 +271,31 @@ class PermissionGate:
             return False
         if allow and remember:
             self._session_rules.add(approval.tool)
+        approval.resolved_by = by
         approval.future.set_result(allow)
         self._pending.pop(approval_id, None)
         _LOG.info("%s %s: %s", "Разрешено" if allow else "Отказано", approval.tool, by)
         self.ctx.bus.publish("approval_resolved", approval_id=approval_id, allowed=allow, by=by)
         return True
+
+    def answer_pending(self, text: str) -> bool:
+        """Короткое «да»/«нет» в чате или голосом — ответ на последнее висящее
+        подтверждение основной сессии, а не новый запрос."""
+        from subbota.voice.loop import parse_yes_no
+        answer = parse_yes_no(text)
+        main = [approval for approval in self._pending.values() if approval.source == "main"]
+        if answer is None or not main:
+            return False
+        return self.resolve(main[-1].id, answer, by="answer")
+
+    def supersede(self) -> bool:
+        """Новый запрос пользователя снимает висящие подтверждения основной сессии:
+        иначе мозг ждёт ответа до таймаута, а все следующие запросы стоят в очереди."""
+        superseded = False
+        for approval in list(self._pending.values()):
+            if approval.source == "main":
+                superseded |= self.resolve(approval.id, False, by="superseded")
+        return superseded
 
     def pending(self) -> list[dict]:
         return [approval.to_dict() for approval in self._pending.values()]

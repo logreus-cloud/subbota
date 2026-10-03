@@ -65,7 +65,10 @@ class PermissionsConfig:
     auto_allow: list[str] = field(default_factory=list)
     always_ask: list[str] = field(default_factory=list)
     safe_shell: list[str] = field(default_factory=lambda: list(_SAFE_SHELL))
-    approval_timeout_s: int = 180
+    # balanced — команды без признаков опасности выполняются сами (subbota/shell_risk.py);
+    # strict — без спроса только команды из safe_shell.
+    shell_policy: str = "balanced"
+    approval_timeout_s: int = 90
 
 
 @dataclass

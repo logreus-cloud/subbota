@@ -92,6 +92,8 @@ class Brain:
     async def ask(self, text: str, source: str = "text") -> TurnResult:
         if self._state != "running":
             return TurnResult("", "Остановлено", True)
+        if source in {"voice", "text"} and self.ctx.gate.answer_pending(text):
+            return TurnResult("", "", False)
         future = asyncio.get_running_loop().create_future()
         turn_id = self._enqueue(text, source, future)
         return await future
@@ -99,9 +101,15 @@ class Brain:
     async def submit(self, text: str, source: str = "text") -> str:
         if self._state != "running":
             raise RuntimeError("Мозг остановлен")
+        if source in {"voice", "text"} and self.ctx.gate.answer_pending(text):
+            return ""
         return self._enqueue(text, source, None)
 
     def _enqueue(self, text: str, source: str, future: asyncio.Future | None) -> str:
+        if source in {"voice", "text"} and self.ctx.gate.supersede():
+            # Пользователь перешёл к новому запросу: снимаем висящее подтверждение
+            # и прерываем ход, чтобы модель не повторила команду и не заняла очередь.
+            asyncio.get_running_loop().create_task(self.interrupt())
         turn_id = uuid4().hex[:12]
         self._queue.put_nowait((turn_id, text, source, future))
         self.ctx.bus.publish("user_message", turn_id=turn_id, text=text, source=source)
@@ -299,22 +307,16 @@ class Brain:
                                 break
                 except asyncio.CancelledError:
                     raise
+                except StopAsyncIteration:
+                    # CLI закрыл поток: при остановке это норма, иначе переподключаемся.
+                    if self._state == "running":
+                        _LOG.warning("Поток Claude закрыт, переподключение")
+                        self._fail_active("Соединение с Claude прервалось")
+                    failed = True
                 except Exception as exc:
                     _LOG.exception("Ошибка потока Claude")
                     self.ctx.bus.publish("error", message=str(exc))
-                    if self._active is not None:
-                        turn_id, future = self._active
-                        result = TurnResult(
-                            turn_id, "Прервано" if self._interrupted else str(exc), True
-                        )
-                        self.ctx.bus.publish(
-                            "turn_done", turn_id=turn_id, result=result.text,
-                            is_error=True, cost_usd=None, duration_ms=0,
-                        )
-                        if future is not None and not future.done():
-                            future.set_result(result)
-                        self._active = None
-                        self.ctx.set_status("idle")
+                    self._fail_active(str(exc))
                     self._backoff = 1
                     failed = True
                 finally:
@@ -373,6 +375,21 @@ class Brain:
                 _LOG.exception("Ошибка отключения Claude")
             if not self._stopping_now():
                 self._state = "stopped"
+
+    def _fail_active(self, reason: str) -> None:
+        """Завершает текущий ход ошибкой, чтобы ждущий ответа не повис."""
+        if self._active is None:
+            return
+        turn_id, future = self._active
+        result = TurnResult(turn_id, "Прервано" if self._interrupted else reason, True)
+        self.ctx.bus.publish(
+            "turn_done", turn_id=turn_id, result=result.text,
+            is_error=True, cost_usd=None, duration_ms=0,
+        )
+        if future is not None and not future.done():
+            future.set_result(result)
+        self._active = None
+        self.ctx.set_status("idle")
 
     def _handle_message(self, message: Any, parts: list[str]) -> None:
         # Блоки публикуются сразу, чтобы панель показывала ход вживую. Пока есть
