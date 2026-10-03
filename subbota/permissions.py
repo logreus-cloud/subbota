@@ -15,7 +15,7 @@ from claude_agent_sdk import PermissionResultAllow, PermissionResultDeny, ToolPe
 from claude_agent_sdk.types import HookCallback, HookContext, HookInput, HookJSONOutput
 
 if TYPE_CHECKING:
-    from jarvis.context import AppContext
+    from subbota.context import AppContext
 
 _LOG = logging.getLogger(__name__)
 _SAFE_TOOLS = {"Read", "Glob", "Grep", "WebSearch", "WebFetch", "TodoWrite"}
@@ -26,7 +26,7 @@ _UNSAFE_GIT_OPTIONS = (
     "--git-dir", "--work-tree", "--textconv",
 )
 _VOICE_DETAIL_LIMIT = 140
-_UNSAFE_JARVIS = {"power_action", "close_window", "set_clipboard", "cancel_code_task"}
+_UNSAFE_СУББОТА = {"power_action", "close_window", "set_clipboard", "cancel_code_task"}
 _UNSAFE_BROWSER = {"browser_file_upload", "browser_evaluate", "browser_run_code", "browser_install"}
 
 
@@ -138,8 +138,8 @@ class PermissionGate:
             return self._allow(tool_name, tool_input, "правило сессии")
         if (
             tool_name in _SAFE_TOOLS
-            or tool_name.startswith("mcp__jarvis__")
-            and tool_name.removeprefix("mcp__jarvis__") not in _UNSAFE_JARVIS
+            or tool_name.startswith("mcp__subbota__")
+            and tool_name.removeprefix("mcp__subbota__") not in _UNSAFE_СУББОТА
             or tool_name.startswith("mcp__playwright__browser_")
             and tool_name.removeprefix("mcp__playwright__") not in _UNSAFE_BROWSER
             or any(fnmatch.fnmatchcase(tool_name, pattern) for pattern in cfg.auto_allow)
@@ -203,7 +203,7 @@ class PermissionGate:
                 spoken = ""
             # Озвучка чистит текст (ссылки → «ссылка», убирает `*`, `>`, `_`):
             # если чистка что-то меняет, пользователь услышит не то, что выполнится.
-            from jarvis.voice.tts import clean_for_speech
+            from subbota.voice.tts import clean_for_speech
             verbatim = all(
                 " ".join(clean_for_speech(part).split()) == " ".join(part.split())
                 for part in (title, spoken)

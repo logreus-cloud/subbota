@@ -4,7 +4,7 @@ import logging
 import re
 import warnings
 
-from jarvis.config import VoiceConfig
+from subbota.config import VoiceConfig
 
 _LOG = logging.getLogger(__name__)
 _HALLUCINATIONS = re.compile(
@@ -21,7 +21,7 @@ class Transcriber:
     def load(self) -> None:
         if self._model is not None:
             return
-        from jarvis.cuda import add_nvidia_dll_dirs
+        from subbota.cuda import add_nvidia_dll_dirs
         add_nvidia_dll_dirs()
         from faster_whisper import WhisperModel
         try:
@@ -53,7 +53,7 @@ class Transcriber:
             language=self.cfg.language,
             beam_size=5,
             vad_filter=True,
-            initial_prompt="Джарвис, ",
+            initial_prompt="Суббота, ",
         )
         text = " ".join(segment.text for segment in segments).strip()
         text = _HALLUCINATIONS.sub("", text).strip(" \t\n.!?…")

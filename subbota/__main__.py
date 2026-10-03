@@ -15,14 +15,14 @@ import win32api
 import win32event
 import winerror
 
-from jarvis.config import Config, load_config
-from jarvis.cuda import add_nvidia_dll_dirs
+from subbota.config import Config, load_config
+from subbota.cuda import add_nvidia_dll_dirs
 
 _LOG = logging.getLogger(__name__)
 
 
 def _logging(cfg: Config) -> None:
-    handler = RotatingFileHandler(cfg.data_dir / "jarvis.log", maxBytes=5 * 1024 * 1024, backupCount=3, encoding="utf-8")
+    handler = RotatingFileHandler(cfg.data_dir / "subbota.log", maxBytes=5 * 1024 * 1024, backupCount=3, encoding="utf-8")
     handlers = [handler]
     if sys.stderr is not None:
         handlers.append(logging.StreamHandler(sys.stderr))
@@ -58,14 +58,14 @@ async def _cancel_code_tasks(manager):
 
 
 async def main(cfg: Config, no_voice: bool = False, no_tray: bool = False) -> None:
-    from jarvis.agent import Brain
-    from jarvis.context import AppContext
-    from jarvis.db import Database
-    from jarvis.events import EventBus
-    from jarvis.permissions import PermissionGate
-    from jarvis.scheduler import ReminderScheduler
-    from jarvis.server import create_app
-    from jarvis.tools.code import CodeTaskManager
+    from subbota.agent import Brain
+    from subbota.context import AppContext
+    from subbota.db import Database
+    from subbota.events import EventBus
+    from subbota.permissions import PermissionGate
+    from subbota.scheduler import ReminderScheduler
+    from subbota.server import create_app
+    from subbota.tools.code import CodeTaskManager
 
     loop = asyncio.get_running_loop()
     db = Database(cfg.data_dir)
@@ -76,7 +76,7 @@ async def main(cfg: Config, no_voice: bool = False, no_tray: bool = False) -> No
     ctx.code_tasks = CodeTaskManager(ctx)
     ctx.brain = Brain(ctx)
     if cfg.voice.enabled and not no_voice:
-        from jarvis.voice.loop import VoiceLoop
+        from subbota.voice.loop import VoiceLoop
         ctx.voice = VoiceLoop(ctx)
 
     stop_event = asyncio.Event()
@@ -100,7 +100,7 @@ async def main(cfg: Config, no_voice: bool = False, no_tray: bool = False) -> No
         if ctx.voice is not None:
             ctx.voice.start()
         if not no_tray:
-            from jarvis.tray import Tray
+            from subbota.tray import Tray
             tray = Tray(ctx, lambda: loop.call_soon_threadsafe(stop_event.set))
             tray.start()
         server = uvicorn.Server(uvicorn.Config(create_app(ctx), host="127.0.0.1", port=cfg.server.port, log_config=None, ws="websockets"))
@@ -122,7 +122,7 @@ async def main(cfg: Config, no_voice: bool = False, no_tray: bool = False) -> No
             if cfg.server.open_browser_on_start:
                 webbrowser.open(f"http://127.0.0.1:{cfg.server.port}")
             if ctx.voice is not None:
-                await ctx.announce("Джарвис на связи.", "info")
+                await ctx.announce("Суббота на связи.", "info")
             await asyncio.wait({server_task, stop_task}, return_when=asyncio.FIRST_COMPLETED)
             if server_task.done():
                 await _server_result(server_task)
@@ -178,7 +178,7 @@ async def _run_sync(callback):
         finally:
             finished.set()
 
-    thread = threading.Thread(target=run, name="jarvis-stop", daemon=True)
+    thread = threading.Thread(target=run, name="subbota-stop", daemon=True)
     thread.start()
     while not finished.is_set():
         await asyncio.sleep(0.05)
@@ -188,14 +188,14 @@ async def _run_sync(callback):
 
 
 def cli() -> None:
-    parser = argparse.ArgumentParser(description="Локальный голосовой ассистент Джарвис")
+    parser = argparse.ArgumentParser(description="Локальный голосовой ассистент Суббота")
     parser.add_argument("--no-voice", action="store_true")
     parser.add_argument("--no-tray", action="store_true")
     parser.add_argument("--config", type=Path)
     args = parser.parse_args()
     cfg = load_config(args.config)
     _logging(cfg)
-    mutex = win32event.CreateMutex(None, False, r"Global\JarvisAssistantMutex")
+    mutex = win32event.CreateMutex(None, False, r"Global\SubbotaAssistantMutex")
     if win32api.GetLastError() == winerror.ERROR_ALREADY_EXISTS:
         webbrowser.open(f"http://127.0.0.1:{cfg.server.port}")
         win32api.CloseHandle(mutex)

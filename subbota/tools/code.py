@@ -13,10 +13,10 @@ from uuid import uuid4
 from claude_agent_sdk import ClaudeAgentOptions, ResultMessage, SdkMcpTool, query, tool
 from claude_agent_sdk.types import HookMatcher
 
-from jarvis.permissions import CodeScope, make_pre_tool_hook
+from subbota.permissions import CodeScope, make_pre_tool_hook
 
 if TYPE_CHECKING:
-    from jarvis.context import AppContext
+    from subbota.context import AppContext
 
 
 _LOG = logging.getLogger(__name__)

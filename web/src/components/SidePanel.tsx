@@ -45,7 +45,7 @@ export function SidePanel({ open, onClose, approvals, reminders, codeTasks, send
   }, [open, onClose])
 
   return (
-    <aside className={`side-column${open ? ' open' : ''}`} aria-label="Панель Джарвиса">
+    <aside className={`side-column${open ? ' open' : ''}`} aria-label="Панель Субботы">
       <div className="side-header">
         <h2>Панель</h2>
         <button className="button compact side-close" type="button" onClick={onClose}>Закрыть</button>

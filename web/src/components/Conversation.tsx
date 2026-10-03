@@ -83,7 +83,7 @@ export function Conversation({ events, connected, send, loadOlder, loadingOlder,
               {loadingOlder ? 'Загрузка…' : 'Загрузить ранние сообщения'}
             </button>
           )}
-          {items.length === 0 && <div className="empty-state conversation-empty">Скажите «Hey Jarvis» или напишите сообщение</div>}
+          {items.length === 0 && <div className="empty-state conversation-empty">Скажите «Суббота» или напишите сообщение</div>}
           {items.map((item) => item.kind === 'turn'
             ? <TurnView key={item.id} events={item.events} />
             : <div className={`announcement${item.event.type === 'error' || (item.event.type === 'announcement' && item.event.kind === 'error') ? ' error' : ''}`} key={item.event.id || `error-${lastId}`}>

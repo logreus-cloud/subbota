@@ -11,7 +11,7 @@ from apscheduler.triggers.date import DateTrigger
 from tzlocal import get_localzone
 
 if TYPE_CHECKING:
-    from jarvis.context import AppContext
+    from subbota.context import AppContext
 
 
 _LOG = logging.getLogger(__name__)
@@ -163,7 +163,7 @@ class ReminderScheduler:
                     return
             if reminder["kind"] == "agent":
                 if self.ctx.brain is None:
-                    raise RuntimeError("Джарвис не запущен.")
+                    raise RuntimeError("Суббота не запущена.")
                 result = await self.ctx.brain.ask(reminder["text"], "scheduler")
                 if result.is_error:
                     raise RuntimeError(result.text or "Задача завершилась с ошибкой.")

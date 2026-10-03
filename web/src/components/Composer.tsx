@@ -27,7 +27,7 @@ export function Composer({ connected, send }: {
           value={text}
           rows={1}
           maxLength={20000}
-          placeholder={connected ? 'Напишите Джарвису…' : 'Ожидание соединения…'}
+          placeholder={connected ? 'Напишите Субботе…' : 'Ожидание соединения…'}
           aria-label="Сообщение"
           onChange={(event) => {
             setText(event.target.value)

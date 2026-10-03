@@ -12,7 +12,7 @@ class Database:
     def __init__(self, data_dir: Path) -> None:
         data_dir.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
-        self._conn = sqlite3.connect(data_dir / "jarvis.db", check_same_thread=False)
+        self._conn = sqlite3.connect(data_dir / "subbota.db", check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         with self._lock, self._conn:
             self._conn.execute("PRAGMA journal_mode=WAL")

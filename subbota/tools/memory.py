@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Annotated
 from claude_agent_sdk import SdkMcpTool, tool
 
 if TYPE_CHECKING:
-    from jarvis.context import AppContext
+    from subbota.context import AppContext
 
 
 _LOCK = threading.Lock()

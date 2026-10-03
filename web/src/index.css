@@ -12,7 +12,7 @@
   --red: #ff6b6b;
   --status-color: var(--accent);
   --mono: 'JetBrains Mono', Consolas, monospace;
-  --heading: Rajdhani, sans-serif;
+  --heading: 'Exo 2', sans-serif;
   font: 14px/1.5 Inter, sans-serif;
   color: var(--text);
   background: var(--bg);

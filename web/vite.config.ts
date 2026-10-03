@@ -1,7 +1,7 @@
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 
-// Dev-сервер проксирует API и WebSocket на бэкенд Джарвиса.
+// Dev-сервер проксирует API и WebSocket на бэкенд Субботы.
 export default defineConfig({
   plugins: [react()],
   server: {

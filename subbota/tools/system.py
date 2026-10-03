@@ -17,7 +17,7 @@ from urllib.parse import urlsplit
 from claude_agent_sdk import SdkMcpTool, tool
 
 if TYPE_CHECKING:
-    from jarvis.context import AppContext
+    from subbota.context import AppContext
 
 
 _APP_LOCK = threading.Lock()

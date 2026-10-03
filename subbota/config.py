@@ -18,7 +18,7 @@ _SAFE_SHELL = [
 
 @dataclass
 class GeneralConfig:
-    assistant_name: str = "Джарвис"
+    assistant_name: str = "Суббота"
     user_title: str = "сэр"
     data_dir: Path = Path("data")
     log_level: str = "INFO"
@@ -35,7 +35,7 @@ class AgentConfig:
 class VoiceConfig:
     enabled: bool = True
     wake_engine: str = "vosk"
-    wake_word: str = "джарвис"
+    wake_word: str = "суббота"
     vosk_model: Path = Path("models/vosk/vosk-model-small-ru-0.22")
     wake_threshold: float = 0.5
     whisper_model: str = "small"

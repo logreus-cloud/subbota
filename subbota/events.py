@@ -4,7 +4,7 @@ import asyncio
 from datetime import datetime
 from typing import Any
 
-from jarvis.db import Database
+from subbota.db import Database
 
 
 class EventBus:

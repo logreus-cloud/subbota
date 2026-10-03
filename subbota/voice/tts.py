@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from jarvis.config import VoiceConfig
+from subbota.config import VoiceConfig
 
 _SENTENCES = re.compile(r"(?<=[.!?…])\s+")
 
@@ -51,7 +51,7 @@ class _SileroEngine:
         self._speaker = cfg.silero_speaker
 
     def synthesize(self, text: str, cancel: threading.Event):
-        from jarvis.voice.text_norm import normalize_for_tts
+        from subbota.voice.text_norm import normalize_for_tts
         text = normalize_for_tts(text)
         # Silero выбрасывает символы вне алфавита; если слов не осталось — молчим.
         if not re.search(r"[а-яёА-ЯЁ]", text):
@@ -90,7 +90,7 @@ class Speaker:
         self._cancel = threading.Event()
         self._closed = False
         self._jobs: queue.Queue[_Task | None] = queue.Queue(maxsize=2)
-        self._worker = threading.Thread(target=self._synthesize, name="jarvis-synthesis", daemon=True)
+        self._worker = threading.Thread(target=self._synthesize, name="subbota-synthesis", daemon=True)
         self._worker.start()
 
     def load(self) -> None:

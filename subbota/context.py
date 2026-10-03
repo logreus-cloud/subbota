@@ -5,16 +5,16 @@ import threading
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from jarvis.config import Config
-from jarvis.db import Database
-from jarvis.events import EventBus
+from subbota.config import Config
+from subbota.db import Database
+from subbota.events import EventBus
 
 if TYPE_CHECKING:
-    from jarvis.agent import Brain
-    from jarvis.permissions import PermissionGate
-    from jarvis.scheduler import ReminderScheduler
-    from jarvis.tools.code import CodeTaskManager
-    from jarvis.voice.loop import VoiceLoop
+    from subbota.agent import Brain
+    from subbota.permissions import PermissionGate
+    from subbota.scheduler import ReminderScheduler
+    from subbota.tools.code import CodeTaskManager
+    from subbota.voice.loop import VoiceLoop
 
 
 @dataclass

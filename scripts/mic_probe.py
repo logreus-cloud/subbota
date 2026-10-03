@@ -10,9 +10,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import numpy as np
 import sounddevice as sd
 
-from jarvis.config import load_config
-from jarvis.voice.audio import MicStream, rms
-from jarvis.voice.wake import make_detector
+from subbota.config import load_config
+from subbota.voice.audio import MicStream, rms
+from subbota.voice.wake import make_detector
 
 
 def main() -> None:

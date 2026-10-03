@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 from claude_agent_sdk import SdkMcpTool, tool
 
 if TYPE_CHECKING:
-    from jarvis.context import AppContext
+    from subbota.context import AppContext
 
 
 def _text(value: str, error: bool = False) -> dict:
@@ -21,7 +21,7 @@ def make_tools(ctx: AppContext) -> list[SdkMcpTool]:
         "add_reminder",
         "Добавить напоминание. when — локальное время ISO YYYY-MM-DDTHH:MM; "
         "recurrence — cron из 5 полей, например 0 9 * * 1-5. "
-        'kind="agent": в назначенное время текст станет задачей Джарвиса, '
+        'kind="agent": в назначенное время текст станет задачей Субботы, '
         "например «сделай утреннюю сводку погоды и новостей», а результат будет озвучен.",
         {
             "type": "object",

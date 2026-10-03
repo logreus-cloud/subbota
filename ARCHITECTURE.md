@@ -1,10 +1,10 @@
-# Jarvis — архитектура
+# Суббота — архитектура
 
 Голосовой ассистент для Windows 11, постоянно работающий в фоне. Мозг — Claude Opus 5.5 через Claude Agent SDK (Python). Голос обрабатывается локально. Управление — веб-панель на localhost и иконка в трее.
 
 ## Стек
 
-- Python 3.12, менеджер `uv`, пакет `jarvis/` (запуск `uv run python -m jarvis`).
+- Python 3.12, менеджер `uv`, пакет `subbota/` (запуск `uv run python -m subbota`).
 - Мозг: `claude-agent-sdk` 0.2.x (`ClaudeSDKClient`, `ClaudeAgentOptions`, `tool`, `create_sdk_mcp_server`, `can_use_tool`). Авторизация берётся из входа в Claude Code, ключ API не нужен.
 - Голос: `openwakeword` 0.4.0 (модель `hey_jarvis` уже в пакете: `openwakeword.models["hey_jarvis"]["model_path"]`, конструктор `Model(wakeword_model_paths=[...])`), `faster-whisper` на CUDA (перед импортом нужно добавить в DLL-пути папки `site-packages/nvidia/*/bin`), `piper-tts` (голос `models/piper/ru_RU-denis-medium.onnx`, `PiperVoice.load(path)`), `sounddevice`.
 - Сервер: FastAPI + uvicorn, WebSocket. Только `127.0.0.1`.
@@ -17,7 +17,7 @@
 ## Структура
 
 ```
-jarvis/
+subbota/
   __main__.py      точка входа: собирает AppContext, запускает всё, корректно гасит
   config.py        загрузка config.toml (tomllib) в dataclass Config
   cuda.py          add_nvidia_dll_dirs(): вызвать до импорта faster_whisper
@@ -26,12 +26,12 @@ jarvis/
   events.py        EventBus: pub/sub + запись в db.events
   permissions.py   PermissionGate: решает, можно ли вызывать инструмент; очередь подтверждений
   agent.py         Brain: одна постоянная сессия ClaudeSDKClient, очередь запросов
-  prompts.py       системный промпт Джарвиса
+  prompts.py       системный промпт Субботы
   scheduler.py     ReminderScheduler
   server.py        FastAPI-приложение: REST + /ws + статика web/dist
   tray.py          иконка в трее
   tools/
-    __init__.py    build_jarvis_server(ctx) -> McpSdkServerConfig; список имён инструментов
+    __init__.py    build_subbota_server(ctx) -> McpSdkServerConfig; список имён инструментов
     system.py      громкость, медиа, приложения, окна, буфер, скриншот, питание, info
     reminders.py   add/list/cancel напоминаний
     memory.py      remember/forget/recall (data/memory.md)
@@ -45,7 +45,7 @@ jarvis/
 web/               frontend
 scripts/install-autostart.ps1, scripts/uninstall-autostart.ps1
 config.example.toml  (config.toml в .gitignore; если его нет, берутся значения по умолчанию)
-data/              (в .gitignore) jarvis.db, memory.md, jarvis.log
+data/              (в .gitignore) subbota.db, memory.md, subbota.log
 models/            (в .gitignore) piper-голоса
 ```
 
@@ -122,7 +122,7 @@ class AppContext:
 Порядок проверки:
 1. Правила сессии (`remember=true`) по имени инструмента → allow.
 2. `cfg.permissions.always_ask` (fnmatch по имени) → ask.
-3. Автоматически разрешено: `Read`, `Glob`, `Grep`, `WebSearch`, `WebFetch`, `TodoWrite`, безопасные `mcp__jarvis__*` (всё, кроме `power_action`, `close_window`, `set_clipboard`), `mcp__playwright__browser_*`, кроме `browser_file_upload`, `browser_evaluate`, `browser_run_code`, `browser_install`. К этому добавляется `cfg.permissions.auto_allow`.
+3. Автоматически разрешено: `Read`, `Glob`, `Grep`, `WebSearch`, `WebFetch`, `TodoWrite`, безопасные `mcp__subbota__*` (всё, кроме `power_action`, `close_window`, `set_clipboard`), `mcp__playwright__browser_*`, кроме `browser_file_upload`, `browser_evaluate`, `browser_run_code`, `browser_install`. К этому добавляется `cfg.permissions.auto_allow`.
 4. `Bash` / `PowerShell`: allow, если команда целиком совпадает с одной из регулярок `cfg.permissions.safe_shell` (по умолчанию: только чтение — `Get-*`, `ls`, `dir`, `cat`, `type`, `echo`, `git status|log|diff|show|branch`, `where`, `whoami`, `hostname`, `ipconfig`, `systeminfo`, `tasklist`) и в ней нет `;`, `|`, `&`, `>`, `` ` ``, `$(`. Иначе ask.
 5. `Write` / `Edit` / `NotebookEdit`: в `CodeScope` allow, если путь внутри `project_dir`. В main allow, если путь внутри `data_dir/workspace`. Иначе ask.
 6. Всё остальное → ask.
@@ -132,7 +132,7 @@ ask: создаётся `Approval(id, tool, title, detail, source, future)`, п�
 ## Brain (`agent.py`)
 
 - Одна постоянная сессия `ClaudeSDKClient`. Подключение, `query` и `receive_response` выполняются в одной worker-задаче: SDK требует, чтобы клиент использовался в той задаче, где он создан.
-- Опции: `model=cfg.agent.model` (claude-opus-5-5), `effort=cfg.agent.effort` (по умолчанию "medium"), `system_prompt=` строка из `prompts.build_system_prompt(ctx)` (не пресет Claude Code: он дорогой), `tools=["Bash","PowerShell","Read","Write","Edit","Glob","Grep","WebSearch","WebFetch","TodoWrite"]`, `mcp_servers={"jarvis": build_jarvis_server(ctx), "playwright": {...} если cfg.browser.enabled}`, `can_use_tool=gate.check(..., scope="main")`, `permission_mode="default"`, `setting_sources=[]` (не подтягивать пользовательские CLAUDE.md, хуки и плагины), `cwd=data_dir/workspace`, `resume=` сохранённый session_id из `kv`, если есть. `allowed_tools` не задаём, чтобы все вызовы шли через `can_use_tool`.
+- Опции: `model=cfg.agent.model` (claude-opus-5-5), `effort=cfg.agent.effort` (по умолчанию "medium"), `system_prompt=` строка из `prompts.build_system_prompt(ctx)` (не пресет Claude Code: он дорогой), `tools=["Bash","PowerShell","Read","Write","Edit","Glob","Grep","WebSearch","WebFetch","TodoWrite"]`, `mcp_servers={"subbota": build_subbota_server(ctx), "playwright": {...} если cfg.browser.enabled}`, `can_use_tool=gate.check(..., scope="main")`, `permission_mode="default"`, `setting_sources=[]` (не подтягивать пользовательские CLAUDE.md, хуки и плагины), `cwd=data_dir/workspace`, `resume=` сохранённый session_id из `kv`, если есть. `allowed_tools` не задаём, чтобы все вызовы шли через `can_use_tool`.
 - Если resume не удался (ошибка при connect), подключаемся заново без resume и стираем ключ.
 - `async def ask(text, source) -> TurnResult(turn_id, text, is_error)` ставит запрос в очередь и ждёт результат. `async def submit(text, source) -> str turn_id` работает без ожидания.
 - В модель уходит текст с префиксом `[{source_label} · {YYYY-MM-DD HH:MM, день недели}] `. source_label: «голос», «панель», «планировщик», «система».

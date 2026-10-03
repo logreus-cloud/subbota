@@ -1,5 +1,5 @@
 [general]
-assistant_name = "Джарвис" # Имя ассистента.
+assistant_name = "Суббота" # Имя ассистента.
 user_title = "сэр" # Обращение к пользователю.
 data_dir = "data" # Папка данных относительно корня проекта.
 log_level = "INFO" # Уровень журналирования.
@@ -12,7 +12,7 @@ extra_instructions = "" # Дополнение к системному пром�
 [voice]
 enabled = true # Включить голос.
 wake_engine = "vosk" # Обращение: "vosk" — по имени, "openwakeword" — «Hey Jarvis».
-wake_word = "джарвис" # Имя-обращение для Vosk (должно быть в словаре модели).
+wake_word = "суббота" # Имя-обращение для Vosk (должно быть в словаре модели).
 vosk_model = "models/vosk/vosk-model-small-ru-0.22" # Модель Vosk для обращения и «стоп».
 wake_threshold = 0.5 # Порог «Hey Jarvis» (только для openwakeword).
 whisper_model = "small" # Модель распознавания.

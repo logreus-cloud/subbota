@@ -13,19 +13,19 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from jarvis.voice.audio import MicStream, rms
-from jarvis.voice.stt import Transcriber
-from jarvis.voice.tts import Speaker
-from jarvis.voice.wake import make_detector
+from subbota.voice.audio import MicStream, rms
+from subbota.voice.stt import Transcriber
+from subbota.voice.tts import Speaker
+from subbota.voice.wake import make_detector
 
 if TYPE_CHECKING:
-    from jarvis.context import AppContext
+    from subbota.context import AppContext
 
 _LOG = logging.getLogger(__name__)
 _ECHO_GUARD_S = 0.35
 _MIN_SPEECH_THRESHOLD = 0.01
 _MAX_SPEECH_THRESHOLD = 0.03
-_STOP = re.compile(r"^(?:джарвис\W*)?(?:стоп|хватит|замолчи|отмена)\b")
+_STOP = re.compile(r"^(?:суббота\W*)?(?:стоп|хватит|замолчи|отмена)\b")
 _NO = {
     "нет", "отмена", "отменить", "отмени", "запрещаю", "нельзя", "не",
     "стоп", "стой", "погоди", "подожди", "потом", "позже", "хватит",
@@ -35,9 +35,9 @@ _NO = {
 _YES = {
     "да", "разрешаю", "давай", "ок", "окей", "выполняй", "выполни", "конечно",
     "подтверждаю", "можно", "ага", "угу", "хорошо", "ладно", "пожалуйста",
-    "джарвис", "сэр",
+    "суббота", "сэр",
 }
-_YES_CORE = _YES - {"пожалуйста", "джарвис", "сэр"}
+_YES_CORE = _YES - {"пожалуйста", "суббота", "сэр"}
 
 
 def parse_yes_no(text: str) -> bool | None:
@@ -127,7 +127,7 @@ class VoiceLoop:
         with self._lifecycle:
             if self._thread is not None or self._closed.is_set():
                 return
-            self._thread = threading.Thread(target=self.run, name="jarvis-voice", daemon=True)
+            self._thread = threading.Thread(target=self.run, name="subbota-voice", daemon=True)
             self._thread.start()
 
     def _enqueue(self, command: tuple) -> bool:
@@ -163,7 +163,7 @@ class VoiceLoop:
                 return
             self._commands.put(("stop",))
             if self._thread is None:
-                self._thread = threading.Thread(target=self.run, name="jarvis-voice", daemon=True)
+                self._thread = threading.Thread(target=self.run, name="subbota-voice", daemon=True)
                 self._thread.start()
             thread = self._thread
         if thread is not threading.current_thread():
@@ -183,9 +183,9 @@ class VoiceLoop:
                     self.ctx.bus.publish("error", message=str(exc))
                     self._stopping = True
             if not self._stopping:
-                self._talker = threading.Thread(target=self._talk, name="jarvis-speaker", daemon=True)
+                self._talker = threading.Thread(target=self._talk, name="subbota-speaker", daemon=True)
                 self._stt_thread = threading.Thread(
-                    target=self._transcribe, name="jarvis-transcriber", daemon=True,
+                    target=self._transcribe, name="subbota-transcriber", daemon=True,
                 )
                 self._talker.start()
                 self._stt_thread.start()
@@ -402,7 +402,7 @@ class VoiceLoop:
             return
         self._recording_reserved = True
         if beep:
-            # Буфер микрофона не сбрасываем: «Джарвис, какая громкость» говорят
+            # Буфер микрофона не сбрасываем: «Суббота, какая громкость» говорят
             # на одном дыхании, и начало вопроса пришлось бы на сигнал.
             self.speaker.beep("wake")
         now = time.monotonic()

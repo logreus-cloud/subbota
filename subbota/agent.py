@@ -21,15 +21,15 @@ from claude_agent_sdk import (
     UserMessage,
 )
 from claude_agent_sdk.types import HookMatcher
-from jarvis.permissions import make_pre_tool_hook
-from jarvis.prompts import build_system_prompt
-from jarvis.tools import build_jarvis_server
+from subbota.permissions import make_pre_tool_hook
+from subbota.prompts import build_system_prompt
+from subbota.tools import build_subbota_server
 
 if TYPE_CHECKING:
-    from jarvis.context import AppContext
+    from subbota.context import AppContext
 
 _LOG = logging.getLogger(__name__)
-_CLI_LOG = logging.getLogger("jarvis.cli")
+_CLI_LOG = logging.getLogger("subbota.cli")
 _SOURCES = {"voice": "голос", "text": "панель", "scheduler": "планировщик", "system": "система"}
 _DAYS = ("понедельник", "вторник", "среда", "четверг", "пятница", "суббота", "воскресенье")
 _TOOLS = ["Bash", "PowerShell", "Read", "Write", "Edit", "Glob", "Grep", "WebSearch", "WebFetch", "TodoWrite"]
@@ -181,7 +181,7 @@ class Brain:
         cfg = self.ctx.cfg
         prompt = await asyncio.to_thread(build_system_prompt, self.ctx)
         workspace = await self.ctx.gate.ready()
-        servers: dict[str, Any] = {"jarvis": build_jarvis_server(self.ctx)}
+        servers: dict[str, Any] = {"subbota": build_subbota_server(self.ctx)}
         if cfg.browser.enabled:
             if shutil.which(cfg.browser.command):
                 servers["playwright"] = {

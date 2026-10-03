@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
 import { getHistory, getReminders } from './api'
-import type { Approval, CodeTask, Command, Event, JarvisState, Snapshot } from './types'
+import type { Approval, CodeTask, Command, Event, SubbotaState, Snapshot } from './types'
 
-const initialState: JarvisState = {
+const initialState: SubbotaState = {
   status: 'idle',
   mic_muted: false,
   events: [],
@@ -18,7 +18,7 @@ type Action =
   | { type: 'event'; data: Event }
   | { type: 'connected'; value: boolean }
   | { type: 'older'; events: Event[] }
-  | { type: 'reminders'; reminders: JarvisState['reminders'] }
+  | { type: 'reminders'; reminders: SubbotaState['reminders'] }
 
 let localErrors = 0
 
@@ -42,7 +42,7 @@ function taskId(task: CodeTask) {
   return task.task_id ?? task.id
 }
 
-function reducer(state: JarvisState, action: Action): JarvisState {
+function reducer(state: SubbotaState, action: Action): SubbotaState {
   if (action.type === 'connected') return { ...state, connected: action.value }
   if (action.type === 'reminders') return { ...state, reminders: action.reminders }
   if (action.type === 'older') {
@@ -101,7 +101,7 @@ function reducer(state: JarvisState, action: Action): JarvisState {
   return next
 }
 
-export function useJarvis() {
+export function useSubbota() {
   const [state, dispatch] = useReducer(reducer, initialState)
   const [loadingOlder, setLoadingOlder] = useState(false)
   const [hasMore, setHasMore] = useState(true)

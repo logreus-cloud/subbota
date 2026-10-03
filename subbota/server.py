@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from jarvis.tools.memory import _LOCK, _write
+from subbota.tools.memory import _LOCK, _write
 
 
 class ReminderBody(BaseModel):

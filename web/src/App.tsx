@@ -2,10 +2,10 @@ import { useState } from 'react'
 import { Core, CoreActions } from './components/Core'
 import { Conversation } from './components/Conversation'
 import { SidePanel } from './components/SidePanel'
-import { useJarvis } from './useJarvis'
+import { useSubbota } from './useSubbota'
 
 function App() {
-  const { state, send, loadOlder, loadingOlder, hasMore } = useJarvis()
+  const { state, send, loadOlder, loadingOlder, hasMore } = useSubbota()
   const [panelOpen, setPanelOpen] = useState(false)
 
   return (
@@ -21,7 +21,7 @@ function App() {
         <header className="conversation-header">
           <div className="mobile-identity">
             <span className="mini-core" aria-hidden="true" />
-            <span>ДЖАРВИС <small>{state.mic_muted ? 'Микрофон выключен' : state.status === 'idle' ? 'Ожидаю «Hey Jarvis»' : state.status === 'thinking' ? 'Думаю' : state.status === 'speaking' ? 'Говорю' : state.status === 'transcribing' ? 'Распознаю' : 'Слушаю'}</small></span>
+            <span>СУББОТА <small>{state.mic_muted ? 'Микрофон выключен' : state.status === 'idle' ? 'Скажите «Суббота»' : state.status === 'thinking' ? 'Думаю' : state.status === 'speaking' ? 'Говорю' : state.status === 'transcribing' ? 'Распознаю' : 'Слушаю'}</small></span>
           </div>
           <h1>Разговор</h1>
           <button className="panel-toggle" type="button" onClick={() => setPanelOpen(true)}>

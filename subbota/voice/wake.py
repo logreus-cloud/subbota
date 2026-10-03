@@ -5,7 +5,7 @@ import logging
 import time
 from typing import Literal
 
-from jarvis.config import VoiceConfig
+from subbota.config import VoiceConfig
 
 _LOG = logging.getLogger(__name__)
 # Что услышал детектор: обращение по имени или стоп-слово (перебивание).
@@ -56,7 +56,7 @@ class WakeWordDetector:
 
 
 class VoskKeywordSpotter:
-    """Обращение по имени («Джарвис») и стоп-слова через Vosk с узкой грамматикой.
+    """Обращение по имени («Суббота») и стоп-слова через Vosk с узкой грамматикой.
 
     Грамматика из нескольких слов плюс [unk]: всё остальное распознаётся как
     «неизвестное», поэтому Vosk почти не грузит CPU и не путает обычную речь
@@ -80,8 +80,10 @@ class VoskKeywordSpotter:
         import vosk
         vosk.SetLogLevel(-1)
         self._model = vosk.Model(str(self.cfg.vosk_model))
-        grammar = json.dumps([self.word, *_STOP_WORDS, "[unk]"], ensure_ascii=False)
-        self._rec = vosk.KaldiRecognizer(self._model, 16000, grammar)
+        # Без грамматики: с узким словарём Vosk подгоняет любую речь под имя
+        # («в субботу», «сегодня» → «суббота»). Полная модель выдаёт настоящие
+        # слова, и имя срабатывает только как отдельное слово.
+        self._rec = vosk.KaldiRecognizer(self._model, 16000)
 
     def process(self, block, threshold: float | None = None) -> WakeEvent:
         self.load()

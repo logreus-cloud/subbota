@@ -2,7 +2,7 @@ import { useState } from 'react'
 import type { Command, Event, Status } from '../types'
 
 const labels: Record<Status, string> = {
-  idle: 'Ожидаю «Hey Jarvis»',
+  idle: 'Скажите «Суббота»',
   listening: 'Слушаю',
   recording: 'Слушаю',
   transcribing: 'Распознаю',
@@ -50,7 +50,7 @@ export function Core({ status, muted, connected, events, send }: Props) {
 
   return (
     <aside className="core-column">
-      <div className="logo">JARVIS</div>
+      <div className="logo">СУББОТА</div>
       <div className="logo-caption">ПЕРСОНАЛЬНЫЙ АССИСТЕНТ</div>
       <div className="reactor-wrap">
         <svg className="reactor" viewBox="0 0 200 200" aria-hidden="true">

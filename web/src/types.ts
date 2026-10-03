@@ -75,7 +75,7 @@ export type Config = {
   browser?: { enabled?: boolean }
 }
 
-export type JarvisState = {
+export type SubbotaState = {
   status: Status
   mic_muted: boolean
   events: Event[]

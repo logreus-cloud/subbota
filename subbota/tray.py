@@ -22,7 +22,7 @@ class Tray:
         self._thread: threading.Thread | None = None
         self._task: asyncio.Task | None = None
         self._queue = None
-        self.icon = pystray.Icon("JarvisAssistant", self._image(), "Джарвис", pystray.Menu(
+        self.icon = pystray.Icon("SubbotaAssistant", self._image(), "Суббота", pystray.Menu(
             pystray.MenuItem("Открыть панель", self._open, default=True),
             pystray.MenuItem("Микрофон", self._mute, checked=lambda item: not self.ctx.state["mic_muted"]),
             pystray.MenuItem("Новый разговор", self._reset),
@@ -73,9 +73,9 @@ class Tray:
                     self.icon.icon = self._image()
                     self.icon.update_menu()
                 elif event["type"] == "announcement" and event.get("kind") in {"reminder", "code_task"}:
-                    self._notify(event.get("text", ""), "Джарвис")
+                    self._notify(event.get("text", ""), "Суббота")
                 elif event["type"] == "approval_request":
-                    self._notify(f"Нужно подтверждение: {event.get('title', '')}", "Джарвис")
+                    self._notify(f"Нужно подтверждение: {event.get('title', '')}", "Суббота")
         finally:
             self.ctx.bus.unsubscribe(queue)
 
@@ -90,7 +90,7 @@ class Tray:
             return
         self._queue = self.ctx.bus.subscribe()
         self._task = self.ctx.loop.create_task(self._events())
-        self._thread = threading.Thread(target=self.icon.run, name="jarvis-tray", daemon=True)
+        self._thread = threading.Thread(target=self.icon.run, name="subbota-tray", daemon=True)
         self._thread.start()
 
     def stop(self):
