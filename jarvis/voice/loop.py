@@ -23,6 +23,8 @@ if TYPE_CHECKING:
 
 _LOG = logging.getLogger(__name__)
 _ECHO_GUARD_S = 0.35
+_MIN_SPEECH_THRESHOLD = 0.01
+_MAX_SPEECH_THRESHOLD = 0.03
 _STOP = re.compile(r"^(?:джарвис\W*)?(?:стоп|хватит|замолчи|отмена)\b")
 _NO = {
     "нет", "отмена", "отменить", "отмени", "запрещаю", "нельзя", "не",
@@ -112,7 +114,7 @@ class VoiceLoop:
         self._pending_wake = False
         self._reply_generation = 0
         self._pending: dict[Future, int] = {}
-        self._noise: deque[float] = deque(maxlen=13)
+        self._noise: deque[float] = deque(maxlen=62)  # ~5 с в IDLE
         self._recorded: list[np.ndarray] = []
         self._last_voice = 0.0
         self._speech_s = 0.0
@@ -189,6 +191,7 @@ class VoiceLoop:
                 self._stt_thread.start()
                 try:
                     self.mic.start()
+                    _LOG.info("Голос: микрофон %r, порог wake %.2f", self.cfg.input_device, self.cfg.wake_threshold)
                 except Exception:
                     _LOG.exception("Не удалось открыть микрофон")
                 while not self._stopping:
@@ -256,11 +259,31 @@ class VoiceLoop:
             if not self.mic.restart():
                 time.sleep(0.05)
         else:
+            self._heartbeat(block)
             self._process_audio(block)
         self._check_deadlines()
         self._maybe_start_confirm()
         self._dispatch_speech()
         self._refresh_status()
+
+    def _heartbeat(self, block: np.ndarray) -> None:
+        # Раз в 10 с пишем в лог, что цикл жив и что он слышит.
+        level = rms(block)
+        self._hb_rms = max(getattr(self, "_hb_rms", 0.0), level)
+        self._hb_blocks = getattr(self, "_hb_blocks", 0) + 1
+        now = time.monotonic()
+        if now < getattr(self, "_hb_next", 0.0):
+            return
+        if getattr(self, "_hb_next", 0.0):
+            _LOG.info(
+                "Голос: state=%s speech=%s confirm=%s muted=%s блоков=%d rms_max=%.4f wake_max=%.3f",
+                self._state, self._active_speech.id if self._active_speech else None,
+                self._active_confirm is not None, self._muted, self._hb_blocks,
+                self._hb_rms, self.wake.take_max_score(),
+            )
+        self._hb_next = now + 10
+        self._hb_rms = 0.0
+        self._hb_blocks = 0
 
     def _drain_commands(self) -> None:
         while True:
@@ -339,8 +362,10 @@ class VoiceLoop:
             self.ctx.set_status(status)
 
     def _speech_threshold(self) -> float:
-        floor = sum(self._noise) / len(self._noise) if self._noise else 0.0
-        return max(0.01, floor * 3)
+        # Пол шума — нижний перцентиль, а не среднее: иначе в него попадает само
+        # «Hey Jarvis», порог взлетает выше обычной речи и запись сбрасывается.
+        floor = float(np.percentile(self._noise, 20)) if self._noise else 0.0
+        return min(_MAX_SPEECH_THRESHOLD, max(_MIN_SPEECH_THRESHOLD, floor * 3))
 
     def _process_audio(self, block: np.ndarray) -> None:
         if self._muted:
@@ -359,6 +384,7 @@ class VoiceLoop:
         elif self._state == "IDLE":
             self._noise.append(rms(block))
             if self.wake.process(block):
+                _LOG.info("Голос: wake word")
                 self._begin_recording(beep=True)
 
     def _begin_recording(
@@ -405,6 +431,7 @@ class VoiceLoop:
         if self._state != "RECORDING" or self._record_id is None:
             return
         if not self._heard:
+            _LOG.info("Голос: речь не услышана (порог %.4f), запись сброшена", self._speech_threshold())
             self._cancel_recording()
             return
         audio = np.concatenate(self._recorded)
@@ -434,6 +461,7 @@ class VoiceLoop:
         self._record_id = None
         self._record_confirm = None
         self._state = "IDLE"
+        _LOG.info("Голос: распознано %r%s", text, " (ответ на подтверждение)" if active else "")
         if error is not None:
             _LOG.error("Ошибка распознавания", exc_info=error)
             self.ctx.bus.publish("error", message=str(error))
@@ -511,6 +539,7 @@ class VoiceLoop:
             self._active_speech = job
             if self._active_confirm is not None and self._active_confirm.question is job:
                 self._recording_reserved = True
+            _LOG.info("Голос: говорю #%d (%d симв.)", job.id, len(job.text))
             self._talker_jobs.put((job.id, job.text, self.speaker.generation))
             return
 
@@ -519,6 +548,7 @@ class VoiceLoop:
         if job is None or job.id != speech_id:
             return
         self._active_speech = None
+        _LOG.info("Голос: реплика #%d завершена%s", speech_id, f" с ошибкой: {error}" if error else "")
         if error is not None:
             job.interrupted = True
             self.ctx.bus.publish("error", message=str(error))

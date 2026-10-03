@@ -8,6 +8,12 @@ class WakeWordDetector:
         self.threshold = threshold
         self._model = None
         self._cooldown_until = 0.0
+        self._max_score = 0.0
+
+    def take_max_score(self) -> float:
+        """Максимальная оценка с прошлого вызова (для диагностики)."""
+        value, self._max_score = self._max_score, 0.0
+        return value
 
     def load(self) -> None:
         if self._model is not None:
@@ -23,6 +29,7 @@ class WakeWordDetector:
         if now < self._cooldown_until:
             return False
         scores = self._model.predict(block)
+        self._max_score = max(self._max_score, *(float(score) for score in scores.values()))
         limit = self.threshold if threshold is None else threshold
         if any(float(score) > limit for score in scores.values()):
             self._model.reset()
